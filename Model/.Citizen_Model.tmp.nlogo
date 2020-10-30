@@ -1,5 +1,5 @@
 __includes [ "utilities.nls" ] ; all the boring but important stuff not related to content
-extensions [ csv ]
+extensions [ csv table ]
 
 
 globals [
@@ -8,7 +8,11 @@ globals [
   toplefty
   bottomrightx
   bottomrighty
-  runtime; model for 3 years
+  runtime ; model for 3 years
+  day ; 1 = Monday, 7 = Sunday
+  totaldays ; total runtime in days of the system
+  ticksperday ; calculated by the user's resolution input
+  tickstoday ; count of the numbers of ticks on one day
 ]
 
 
@@ -28,9 +32,10 @@ citizens-own [
   children ; boolean, whether one has children or not
   job ; boolean, whether one has a job or not
   religious ; boolean, whether one is religious or not
-  initiative ; boolean, whether one is involved in a initiative
   house ; the home patch of the turtle
   work ; save the working place as an agent variable to not calculate it each round
+  schedule ; create a daily schedule that each agent adheres to
+  qrcodes-scanned ; number of qr codes scanned by the agents
 ]
 
 
@@ -40,25 +45,50 @@ to setup
   setupMap
   loadData
 
+  set day 0
+  set ticksperday 1440 / resolution
+  set tickstoday 0
+
   setup-citizens
 
   reset-ticks
 
-  set runtime 1095 ; run for 3 years
+
 end
 
 ; Go Function --------------------------------
 to go
-  ; Check if simulation is finished
-  if ticks > runtime [ stop ]
+  ; do timekeeping
+  do-timekeeping
 
   ; let citizens life their day
-  live-a-citizen-day
-
+  ask citizens [live-life who]
 
   tick ; next time step
 end
 
+
+
+; Timekeeping
+to do-timekeeping
+  ifelse (tickstoday < ticksperday)
+  ; in case the day is not yet finished
+  [set tickstoday tickstoday + 1]
+
+  ; in case the day is finished, advance one day and let citizens reschedule their day
+  [set tickstoday 0
+    ; add one day to the total number of days
+    set totaldays totaldays + 1
+
+    ; in case it is sunday, set day to monday
+    ifelse (day = 7) [ set day 1]
+    [ set day day + 1 ]
+
+    ;let all citizens schedule their day
+    ask citizens [ schedule-day who ]
+    ]
+
+end
 
 
 
@@ -69,51 +99,155 @@ to setup-citizens
     set children random-float 1 < 0.6 ; chance that one citizen has children is 60%
     set job random-float 1 < 0.6 ; chance that one citizen has a job is 60% as well
     set religious random-float 1 < 0.5 ; chance that one citizen is religious is 50%
-    set initiative random-float 1 < 0.12 ; 12 % are part of an initiative initially
     set house patch-at 0 0 ; remember the home location of the agent
+    set pls random-normal 40 10 ;
+    set qrcodes-scanned 0;
+    set shape "person"
+    set size 15
 
     ; calculate the patch where the citizen works
     if job [
-
       ifelse (abs ((xcor / 815) - 0.5)) > abs ((ycor / 785) - 0.5 )
-      ;[show "x cor"][show "ycor"]
       [ ifelse (xcor / 815) > 0.5 [ set work patch 814 ycor ] [ set work patch 0 ycor ]]
-      ;[ set work patch 0 0]
-      ;[ show ycor ]
       [ ifelse (ycor / 785) > 0.5 [ set work patch xcor 784 ] [ set work patch xcor 0 ]]
+    ]
+
+    ; setup the schedule for each agent
+    set schedule table:make
+    let i 0
+    repeat (ticksperday + 1) [
+      table:put schedule i "home"
+      set i i + 1
     ]
 
   ]
 
 end
 
-to live-a-citizen-day
+to live-life [turtle-id]
+
+  ;get current activity from schedule - WHY IS IT NOT WORKING?!
+  let current-activity table:get [schedule] of turtle turtle-id tickstoday
+
+  ;if ( current-activity = work) [show current-activity]
+  ;if ([job] of turtle turtle-id)
+  ;[ move-to [work] of turtle turtle-id ]
+
+end
 
 
 
 
-  ask citizens with [ job = true ] [
-    move-to work
+
+
+to schedule-day [turtle-id]
+
+  ; empty the schedule of the day
+  let i 0
+  repeat (ticksperday + 1) [
+    table:put [schedule] of turtle turtle-id i "home"
+    set i i + 1
   ]
 
 
-  ; at the end of the day, each citizen should return home
-  ask citizens[
-    move-to house
+  let activities-today table:make
+  let timescheduled 0
+
+  ; in case of weekday, add the weekday activities
+  if (day < 6)
+  [
+    ; in case the citizen has a job
+    if ([job] of turtle turtle-id)
+    [
+      let worktime random-normal 7 1
+      table:put activities-today "work" worktime
+      set timescheduled timescheduled + worktime
+
+    ]
+
+    ; in case the citizen has children
+    if ([children] of turtle turtle-id)
+    [
+      let schooltime random-normal 1 0.5
+      table:put activities-today "school" schooltime
+      set timescheduled timescheduled + schooltime
+    ]
+
   ]
 
+
+  ; applicable for all the days and based on chance
+
+  ;worship
+  if ([religious] of turtle turtle-id and random 7 < 1)
+    [
+      let religioustime random-normal 1 0.5
+      table:put activities-today "worship" religioustime
+      set timescheduled timescheduled + religioustime
+    ]
+
+
+  ; intitative
+
+
+  ; shopping
+  if (random 7 < 3)
+  [
+    let shoppingtime random-normal 1.5 0.5
+    table:put activities-today "shopping" shoppingtime
+    set timescheduled timescheduled + shoppingtime
+  ]
+
+  ; recreational walk
+  if (random 7 < 2)
+  [
+    let walktime random-normal 2 0.5
+    table:put activities-today "walking" walktime
+    set timescheduled timescheduled + walktime
+  ]
+
+
+
+
+  ;get a start time for work, which is centered around the time they plan to soend on activities each day
+  ; "center" of the day is at 1300 -> substract half of timescheduled from it
+
+  let starttime round (((random-normal 13 1) - timescheduled / 2) * 60 / resolution)
+
+  ;iterate over all activities
+  let row 0
+  let activity-list table:keys activities-today
+  let duration-list table:values activities-today
+
+  repeat table:length activities-today
+  [
+    ; get activity and duration
+    let activity item row activity-list
+    let duration item row duration-list
+
+    ;schedule the activity in the daily schedule
+    repeat round (duration * 60 / resolution)
+    [
+      ; insert the activity at the given time
+      table:put [schedule] of turtle turtle-id starttime activity
+
+      ; increase starttime by one tick
+      set starttime starttime + 1
+    ]
+
+    set row row + 1
+  ]
+
+
+  show [schedule] of turtle turtle-id
+
+
+  ;show activities-today
 
 
 end
 
 
-to walk-recreationally
-  ; go to a random place on the map
-  move-to one-of patches
-
-  ; check for neighbors
-
-end
 @#$#@#$#@
 GRAPHICS-WINDOW
 224
@@ -204,6 +338,21 @@ OUTPUT
 1664
 188
 12
+
+SLIDER
+12
+338
+202
+371
+resolution
+resolution
+5
+60
+10.0
+5
+1
+minutes/tick
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
