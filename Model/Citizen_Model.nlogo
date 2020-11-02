@@ -90,7 +90,80 @@ to do-timekeeping
 
 end
 
+; spatial setup
+to setnodes
+  file-close-all ; close all open files
 
+  if not file-exists? "data/nodesBIKEclean.csv" [
+    error "No 'data/nodesBIKEclean.csv' file found!"
+  ]
+  let fileHeader 1 ; counting from 0
+
+  file-open "data/nodesBIKEclean.csv" ; need to skip the first fileHeader rows
+  let row 0 ; the row that is currently read
+  ; reading the data through single loop
+  while [ not file-at-end? ] [
+    ; here the CSV extension grabs a single line and puts the read data in a list
+    let data (csv:from-row  file-read-line)
+    ; check if the row is empty 
+    if fileHeader <= row  [ 
+      let index item 1 data
+      let xcoordinate convertxcor item 3 data
+      let ycoordinate convertycor item 2 data
+    if item 3 data >= topleftx and item 3 data <= bottomrightx and item 2 data <= toplefty and item 2 data >= bottomrighty [
+    create-nodes 1
+      [set xcor xcoordinate
+       set ycor ycoordinate
+       set id index
+       set color green
+       set size 0
+       ]
+      ]
+    ] ;end past header
+
+    set row row + 1 ; increment the row counter for the header skip
+  ]
+end
+
+to setedges
+  file-close-all ; close all open files
+
+  if not file-exists? "data/edgesBIKEclean.csv" [
+    error "No 'data/edgesBIKEclean.csv' file found!"
+  ]
+  let fileHeader 1 ; count from 0)
+
+  file-open "data/edgesBIKEclean.csv"
+   ; need to skip the first fileHeader rows
+  let row 0 ; the row that is currently read
+  ; We'll read all the data in a single loop
+  while [ not file-at-end? ] [
+    ; here the CSV extension grabs a single line and puts the read data in a list
+    let data (csv:from-row  file-read-line ";")
+    ; check if the row is empty
+    if fileHeader <= row  [ 
+      let index1 item 2 data
+      let index2 item 3 data
+      if index1 != index2 [
+      ask nodes with [id = index1]
+        [create-links-with nodes with [id = index2] [set weight item 8 data ;;why set weight item as 8?
+        ]]
+    ] ]
+    set row row + 1 ; increment the row counter for the header skip
+  ]
+  set hotspots (link-set)
+  ask patches with [category = "school" or category ="supermarket"] [ask nodes with [distance myself < 20] [set hotspots (link-set hotspots my-links) ] ]
+  end
+
+to setlinkset [destination]
+  set link_set (link-set nw:weighted-path-to destination weight)
+end
+
+to-report calc_linkset [current destination]
+  ask [nearest_node] of current
+    [setlinkset [nearest_node] of destination]
+  report link_set
+end
 
 ; Citizen funtions ----------------------------------------------------------------------
 to setup-citizens
@@ -128,7 +201,6 @@ to live-life [turtle-id]
 
   ;get current activity from schedule - WHY IS IT NOT WORKING?!
   let current-activity table:get [schedule] of turtle turtle-id tickstoday
-
   ;if ( current-activity = work) [show current-activity]
   ;if ([job] of turtle turtle-id)
   ;[ move-to [work] of turtle turtle-id ]
@@ -205,7 +277,7 @@ to schedule-day [turtle-id]
 
 
 
-  ;get a start time for work, which is centered around the time they plan to soend on activities each day
+  ;get a start time for work, which is centered around the time they plan to spend on activities each day
   ; "center" of the day is at 1300 -> substract half of timescheduled from it
 
   let starttime round (((random-normal 13 1) - timescheduled / 2) * 60 / resolution)
@@ -236,7 +308,8 @@ to schedule-day [turtle-id]
 
 
   show [schedule] of turtle turtle-id
-
+to travel [turtle-id]
+  
 
 
 end
