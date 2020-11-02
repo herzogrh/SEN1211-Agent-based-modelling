@@ -25,6 +25,7 @@ breed [citizens citizen]
 patches-own [
   location ; the string holding the name of this location, default is 0
   category ; string holding the category of the location, default is 0
+  viability ; if initiative, 0-100 score, default is 0
 ]
 
 citizens-own [
@@ -50,6 +51,7 @@ to setup
   set tickstoday 0
 
   setup-citizens
+  setup-initiatives
 
   reset-ticks
 
@@ -122,6 +124,8 @@ to setup-citizens
 
   ]
 
+  ask citizens [ schedule-day who ]
+
 end
 
 to live-life [turtle-id]
@@ -129,15 +133,33 @@ to live-life [turtle-id]
   ;get current activity from schedule - WHY IS IT NOT WORKING?!
   let current-activity table:get [schedule] of turtle turtle-id tickstoday
 
-  ;if ( current-activity = work) [show current-activity]
+  if (current-activity = "work") [
+
+    ;Check where am I
+    ; if !patch-of myself = work [
+    ; get difference of my patch and the work path
+    ; move towards work patch with a certain speed
+    ; set new patch of myself ]
+    move-to [work] of turtle turtle-id
+
+  ]
+
+  if (current-activity = "shopping") [
+    ;select one-of patches with[category = "supermarket"] with closest distance
+    ;get difference between my patch and that patch, if not there yet
+    ;move towards patch
+
+  ]
+
+  if (current-activity = "home") [
+    move-to [house] of turtle turtle-id
+  ]
+
   ;if ([job] of turtle turtle-id)
   ;[ move-to [work] of turtle turtle-id ]
 
+
 end
-
-
-
-
 
 
 to schedule-day [turtle-id]
@@ -239,13 +261,28 @@ to schedule-day [turtle-id]
   ]
 
 
-  show [schedule] of turtle turtle-id
-
-
-  ;show activities-today
+  ;show [schedule] of turtle turtle-id
 
 
 end
+
+
+
+; Initiative functions ----------------------------------------------------------------------
+to setup-initiatives
+  ask patches with [category = "neighbourhood initiative"] [
+    set viability floor random-normal 60 15
+  ]
+
+end
+
+
+
+
+
+
+
+
 
 
 @#$#@#$#@
