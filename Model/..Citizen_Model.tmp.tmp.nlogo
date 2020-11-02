@@ -107,7 +107,7 @@ to setup-citizens
     set shape "person"
     set size 15
 
-    ; determine the patch where the citizen works
+    ;  the patch where the citizen works
     if job [
       ifelse (abs ((xcor / 815) - 0.5)) > abs ((ycor / 785) - 0.5 )
       [ ifelse (xcor / 815) > 0.5 [ set work patch 814 ycor ] [ set work patch 0 ycor ]]
