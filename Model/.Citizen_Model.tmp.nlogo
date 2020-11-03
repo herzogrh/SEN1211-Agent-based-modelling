@@ -13,11 +13,17 @@ globals [
   totaldays ; total runtime in days of the system
   ticksperday ; calculated by the user's resolution input
   tickstoday ; count of the numbers of ticks on one day
+
+  number-citizens ; amount of citizens, to specify in the setup-globals procedure
+
+  community-center ; stores the patch of the community center
+  cw-viability-increase ; the amount the viability of an initative increases in case a community worker visits
 ]
 
 
 ; Breeds  ------------------------------------------------------------------------------
 breed [citizens citizen]
+breed [community-workers community-worker]
 
 
 ; Agent Variables -----------------------------------------------------------------------
@@ -26,6 +32,7 @@ patches-own [
   location ; the string holding the name of this location, default is 0
   category ; string holding the category of the location, default is 0
   viability ; if initiative, 0-100 score, default is 0
+  initiative-time ; the duration the initiative has been in place so far in days, default is 0
 ]
 
 citizens-own [
@@ -33,41 +40,69 @@ citizens-own [
   children ; boolean, whether one has children or not
   job ; boolean, whether one has a job or not
   religious ; boolean, whether one is religious or not
+  part-of-initiative ; boolean, whether one is part of an initiative or not
   house ; the home patch of the turtle
   work ; save the working place as an agent variable to not calculate it each round
+  initiative ; save the patch of the initiative the agent is taking part in
   schedule ; create a daily schedule that each agent adheres to
   qrcodes-scanned ; number of qr codes scanned by the agents
+  speed ; in patches per tick (will be calculated with the resolution chosen)
 ]
 
 
-; Setup ---------------------------------------------------------------------------------
+community-workers-own [
+  schedule ; daily schedule which initiatives to visit
+  speed ; speed at which they move forward in patches per tick (will be calculated with the resolution chosen)
+]
+
+; Setup -----------------------------------------------------------------------------------------------------------------
 to setup
   clear-all
+
+  ; Map setup
   setupMap
   loadData
 
-  set day 0
-  set ticksperday 1440 / resolution
-  set tickstoday 0
-
+  ; Setup of turtles and patches
+  setup-globals
   setup-citizens
   setup-initiatives
+  setup-community-workers
+
 
   reset-ticks
-
-
 end
 
-; Go Function --------------------------------
+; Go Function --------------------------------------------------------------------------------------------------------------------------------
 to go
   ; do timekeeping
   do-timekeeping
 
-  ; let citizens life their day
+  ; let all turtles live their lifes and do their jobs (citizens, community workers, police)
   ask citizens [live-life who]
+  ask community-workers [do-job who]
 
   tick ; next time step
 end
+
+
+; Setup globals variables ------------------------------------------------------------------------------------------------
+to setup-globals
+  ; Timekeeping setup
+  set day 0
+  set ticksperday 1440 / resolution
+  set tickstoday 0
+
+
+  set n
+
+  ; Community worker setup
+  set community-center one-of patches with [category = "community centre"]
+
+
+
+end
+
 
 
 
@@ -86,17 +121,20 @@ to do-timekeeping
     ifelse (day = 7) [ set day 1]
     [ set day day + 1 ]
 
-    ;let all citizens schedule their day
+    ;let all turtles schedule their day
     ask citizens [ schedule-day who ]
+    ask community-workers [ schedule-community-worker-day who ]
+
+    ;add one day to all the initiatives
+    ask patches with [category = "neighbourhood initiative"] [set initiative-time initiative-time + 1]
     ]
 
 end
 
 
-
-; Citizen funtions ----------------------------------------------------------------------
+; Citizen functions ----------------------------------------------------------------------
 to setup-citizens
-  create-citizens 200 [
+  create-citizens 5000 [
     setxy random-xcor random-ycor
     set children random-float 1 < 0.6 ; chance that one citizen has children is 60%
     set job random-float 1 < 0.6 ; chance that one citizen has a job is 60% as well
@@ -104,8 +142,9 @@ to setup-citizens
     set house patch-at 0 0 ; remember the home location of the agent
     set pls random-normal 40 10 ;
     set qrcodes-scanned 0;
+    set speed 3 * resolution
     set shape "person"
-    set size 15
+    set size 5
 
     ; calculate the patch where the citizen works
     if job [
@@ -122,6 +161,14 @@ to setup-citizens
       set i i + 1
     ]
 
+    ; setup the citizens who are part of an initiative (12%)
+    ifelse (random-float 1 < 0.12) [
+      set part-of-initiative True
+      set initiative one-of patches with [category = "neighbourhood initiative"]
+    ] [
+      set part-of-initiative False
+    ]
+
   ]
 
   ask citizens [ schedule-day who ]
@@ -130,17 +177,17 @@ end
 
 to live-life [turtle-id]
 
-  ;get current activity from schedule - WHY IS IT NOT WORKING?!
+  ;Get current activity from schedule
   let current-activity table:get [schedule] of turtle turtle-id tickstoday
 
   if (current-activity = "work") [
-
-    ;Check where am I
-    ; if !patch-of myself = work [
-    ; get difference of my patch and the work path
-    ; move towards work patch with a certain speed
-    ; set new patch of myself ]
-    move-to [work] of turtle turtle-id
+    ifelse distance [work] of turtle turtle-id > speed
+    [
+      face [work] of turtle turtle-id
+      fd speed
+    ] [
+      move-to [work] of turtle turtle-id
+    ]
 
   ]
 
@@ -152,11 +199,21 @@ to live-life [turtle-id]
   ]
 
   if (current-activity = "home") [
-    move-to [house] of turtle turtle-id
+    ifelse distance [house] of turtle turtle-id > speed
+    [
+      face [house] of turtle turtle-id
+      fd speed
+    ] [
+      move-to [house] of turtle turtle-id
+    ]
+
+
   ]
 
-  ;if ([job] of turtle turtle-id)
-  ;[ move-to [work] of turtle turtle-id ]
+  ;Interaction algorithm
+
+
+  ; QR code scanning algorithm
 
 
 end
@@ -267,11 +324,75 @@ to schedule-day [turtle-id]
 end
 
 
+; Community Worker functions ----------------------------------------------------------------------
+to setup-community-workers
+  create-community-workers number-cw [
+
+    ;let them initially be at the community center the whole day long
+    set schedule table:make
+    let i 0
+    repeat (ticksperday + 1) [
+      table:put schedule i community-center
+      set i i + 1
+    ]
+    set speed 3 * resolution
+    set shape "person service"
+    set size 10
+  ]
+
+  ask community-workers [ schedule-community-worker-day who ]
+
+end
+
+
+to schedule-community-worker-day [turtle-id]
+  ; empty the schedule of the day
+  let i 0
+  repeat (ticksperday + 1) [
+    table:put [schedule] of turtle turtle-id i community-center
+    set i i + 1
+  ]
+
+  ; Plan new day - Assumption: Community workers visit the initiatives randomly
+  let workingday 8 ; hours
+  let initiatives-to-visit 1 + random 3 ; between 1 and 3 initiatives per day
+  let time-per-initiative workingday / initiatives-to-visit
+  let starttime round ((random-normal 10 1) * 60 / resolution)
+
+  ; Add initiatives to the schedule
+  repeat initiatives-to-visit [
+    let initiative-to-visit one-of patches with [category = "neighbourhood initiative"]
+    repeat round (time-per-initiative * 60 / resolution)
+    [
+      ; insert the activity at the given time
+      table:put [schedule] of turtle turtle-id starttime initiative-to-visit
+
+      ; increase starttime by one tick
+      set starttime starttime + 1
+    ]
+  ]
+
+end
+
+to do-job [turtle-id]
+  ;Get scheduled patch from community worker
+  let scheduled-patch table:get [schedule] of turtle turtle-id tickstoday
+
+  ifelse distance scheduled-patch > [speed] of turtle turtle-id [
+    face scheduled-patch
+    fd [speed] of turtle turtle-id
+  ] [
+    move-to scheduled-patch
+  ]
+
+end
 
 ; Initiative functions ----------------------------------------------------------------------
 to setup-initiatives
+  ; set initial viability of each initiative with a max of 100 and a min of 0
   ask patches with [category = "neighbourhood initiative"] [
-    set viability floor random-normal 60 15
+    set viability min list 100 max list 0 floor random-normal 60 15
+    set initiative-time 0
   ]
 
 end
@@ -283,13 +404,11 @@ end
 
 
 
-
-
 @#$#@#$#@
 GRAPHICS-WINDOW
-224
+234
 10
-1047
+1057
 804
 -1
 -1
@@ -379,16 +498,31 @@ OUTPUT
 SLIDER
 12
 338
-202
+224
 371
 resolution
 resolution
 5
 60
-10.0
+5.0
 5
 1
 minutes/tick
+HORIZONTAL
+
+SLIDER
+12
+401
+223
+434
+number-cw
+number-cw
+0
+10
+3.0
+1
+1
+Community workers
 HORIZONTAL
 
 @#$#@#$#@
@@ -607,6 +741,26 @@ Polygon -7500403 true true 105 90 120 195 90 285 105 300 135 300 150 225 165 300
 Rectangle -7500403 true true 127 79 172 94
 Polygon -7500403 true true 195 90 240 150 225 180 165 105
 Polygon -7500403 true true 105 90 60 150 75 180 135 105
+
+person service
+false
+0
+Polygon -7500403 true true 180 195 120 195 90 285 105 300 135 300 150 225 165 300 195 300 210 285
+Polygon -1 true false 120 90 105 90 60 195 90 210 120 150 120 195 180 195 180 150 210 210 240 195 195 90 180 90 165 105 150 165 135 105 120 90
+Polygon -1 true false 123 90 149 141 177 90
+Rectangle -7500403 true true 123 76 176 92
+Circle -7500403 true true 110 5 80
+Line -13345367 false 121 90 194 90
+Line -16777216 false 148 143 150 196
+Rectangle -16777216 true false 116 186 182 198
+Circle -1 true false 152 143 9
+Circle -1 true false 152 166 9
+Rectangle -16777216 true false 179 164 183 186
+Polygon -2674135 true false 180 90 195 90 183 160 180 195 150 195 150 135 180 90
+Polygon -2674135 true false 120 90 105 90 114 161 120 195 150 195 150 135 120 90
+Polygon -2674135 true false 155 91 128 77 128 101
+Rectangle -16777216 true false 118 129 141 140
+Polygon -2674135 true false 145 91 172 77 172 101
 
 plant
 false
