@@ -13,11 +13,18 @@ globals [
   totaldays ; total runtime in days of the system
   ticksperday ; calculated by the user's resolution input
   tickstoday ; count of the numbers of ticks on one day
+
+  overall-pls ; the mean value of all citizens' PLS index
+
+  crimes-list ; list containing reported burglaries' locations, calling for police's attention
+  crimes ; number of overall burlaries that have occurred
+  litter-list ; list containing litter locations
 ]
 
 
 ; Breeds  ------------------------------------------------------------------------------
 breed [citizens citizen]
+breed [police-officers police-officer]
 
 
 ; Agent Variables -----------------------------------------------------------------------
@@ -39,6 +46,11 @@ citizens-own [
   qrcodes-scanned ; number of qr codes scanned by the agents
 ]
 
+police-officers-own
+[
+  station ; the station patch of a police officer
+]
+
 
 ; Setup ---------------------------------------------------------------------------------
 to setup
@@ -52,6 +64,9 @@ to setup
 
   setup-citizens
   setup-initiatives
+  setup-police
+  setup-crime
+  ;setup-litter
 
   reset-ticks
 
@@ -264,6 +279,82 @@ to schedule-day [turtle-id]
 
 
 end
+; ploblematic locations' functions ---------------------------------------------------------
+to setup-crime
+  ; the surface area of Bouwlust is approximately 2.4 km2
+  ; the poulation density of The Hague is 6523 people/km2
+  ; the registered crimes for the city of The Hague are used as a proxy of burlaries, they are 0.0721 r.c./(person*year)
+  ; Consequently, the number of crimes per year in Bowlust is: 0.0721*6523*2.4 r.c/year = 1128.74 rc/year
+  ; or equivalently, a daily figure of 3.1 r.c./day
+  ; note: this is only an average figure since using spacially and termporally averaged data as inputs.
+
+
+  ; create a list having two-element lists (x-cor, y-cor) as items
+  ; the number of such items is initially 3, but will then be determined by the overall PLS (STILL TO BE DONE)
+  set crimes-list []
+
+  let i 0
+  repeat random-normal 3 1
+  [
+    ; for crimes a "first in fist out" logic is used
+    set crimes-list lput (list random-xcor random-ycor) crimes-list
+
+    let px-coord item 0 item i crimes-list
+    let py-coord item 1 item i crimes-list
+
+    ask patch px-coord py-coord [ set pcolor red ]
+    ask patch px-coord (py-coord + 1) [set pcolor red] ; we make the surrounding patches red, for easier visual identification
+    ask patch px-coord (py-coord - 1) [set pcolor red]
+    ask patch (px-coord + 1) py-coord [set pcolor red]
+    ask patch (px-coord - 1) py-coord [set pcolor red]
+    set i i + 1
+  ]
+  show crimes-list
+end
+
+;to setup-litter
+;  set litter-list []
+;
+;  let i 0
+;  repeat random-normal 50 1
+;  [
+;    ; for crimes a "first in fist out" logic is used
+;    set litter-list lput (list random-xcor random-ycor) crimes-list
+;
+;    let px-coord item 0 item i litter-list
+;    let py-coord item 1 item i litter-list
+;    ask patch px-coord py-coord [ set pcolor brown ]
+;
+;    set i i + 1
+;  ]
+;
+;end
+
+
+
+
+
+
+; police officers functions -----------------------------------------------------------------
+
+to setup-police
+  create-police-officers  200
+  [
+    setxy police-xcor police-ycor
+    set station patch-here ; remember the home location of the agent
+    set shape "person police"
+    set size 15
+  ]
+end
+
+to schedule-police-activities
+
+end
+
+
+
+
+
 
 
 
@@ -274,7 +365,6 @@ to setup-initiatives
   ]
 
 end
-
 
 
 
@@ -607,6 +697,29 @@ Rectangle -7500403 true true 127 79 172 94
 Polygon -7500403 true true 195 90 240 150 225 180 165 105
 Polygon -7500403 true true 105 90 60 150 75 180 135 105
 
+person police
+false
+0
+Polygon -1 true false 124 91 150 165 178 91
+Polygon -13345367 true false 134 91 149 106 134 181 149 196 164 181 149 106 164 91
+Polygon -13345367 true false 180 195 120 195 90 285 105 300 135 300 150 225 165 300 195 300 210 285
+Polygon -13345367 true false 120 90 105 90 60 195 90 210 116 158 120 195 180 195 184 158 210 210 240 195 195 90 180 90 165 105 150 165 135 105 120 90
+Rectangle -7500403 true true 123 76 176 92
+Circle -7500403 true true 110 5 80
+Polygon -13345367 true false 150 26 110 41 97 29 137 -1 158 6 185 0 201 6 196 23 204 34 180 33
+Line -13345367 false 121 90 194 90
+Line -16777216 false 148 143 150 196
+Rectangle -16777216 true false 116 186 182 198
+Rectangle -16777216 true false 109 183 124 227
+Rectangle -16777216 true false 176 183 195 205
+Circle -1 true false 152 143 9
+Circle -1 true false 152 166 9
+Polygon -1184463 true false 172 112 191 112 185 133 179 133
+Polygon -1184463 true false 175 6 194 6 189 21 180 21
+Line -1184463 false 149 24 197 24
+Rectangle -16777216 true false 101 177 122 187
+Rectangle -16777216 true false 179 164 183 186
+
 plant
 false
 0
@@ -732,7 +845,7 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.1.0
+NetLogo 6.1.1
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@

@@ -1,3 +1,12 @@
+;======================
+; Variables to use in main Code tab
+;======================
+globals 
+[
+ police-xcor
+ police-ycor
+] 
+
 ;=======================
 ; Convenience functions
 ;=======================
@@ -57,6 +66,12 @@ to loadData
       let xcoordinate convertxcor item 1 data
       let ycoordinate convertycor item 2 data 
       let category_string item 3 data
+      
+      if category_string = "police station"
+      [
+        set police-xcor xcoordinate
+        set police-ycor ycoordinate
+      ]
       
       let patchToMake patch  xcoordinate ycoordinate 
       ifelse patchToMake != nobody [
