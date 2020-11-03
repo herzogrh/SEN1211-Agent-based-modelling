@@ -55,12 +55,14 @@ citizens-own [
 
 
 community-workers-own [
-  schedule ; daily schedule which initiatives to visit
+  schedule ; daily schedule with initiatives to visit
   speed ; speed at which they move forward in patches per tick (will be calculated with the resolution chosen)
 ]
 
 police-officers-own[
+  police-schedule; daily schedule with problems to visit
   station ; the station patch of a police officer
+  speed ; in patches per tick (will be calculated with the resolution chosen)
 ]
 
 ; Setup -----------------------------------------------------------------------------------------------------------------
@@ -91,6 +93,7 @@ to go
   ; let all turtles live their lifes and do their jobs (citizens, community workers, police)
   ask citizens [live-life who]
   ask community-workers [do-job who]
+  ask police-officers [do-police-job who]
 
   tick ; next time step
 end
@@ -134,6 +137,10 @@ to do-timekeeping
     ;let all turtles schedule their day
     ask citizens [ schedule-day who ]
     ask community-workers [ schedule-community-worker-day who ]
+    ask police-officers [ schedule-police-officer-day who ]
+
+    ; let the daily crimes occur
+    setup-crimes
 
     ;add one day to all the initiatives
     ask patches with [category = "neighbourhood initiative"] [set initiative-time initiative-time + 1]
@@ -338,7 +345,7 @@ end
 to setup-community-workers
   create-community-workers number-cw [
 
-    ;let them initially be at the community center the whole day long
+    ;let them initially be at the community center all day long
     set schedule table:make
     let i 0
     repeat (ticksperday + 1) [
@@ -411,6 +418,7 @@ end
 
 
 
+
 ; ploblematic locations' functions ---------------------------------------------------------
 to setup-crimes
   ; the surface area of Bouwlust is approximately 2.4 km2
@@ -429,19 +437,26 @@ to setup-crimes
   repeat random-normal 3 1
   [
     ; for crimes a "first in fist out" logic is used
-    set crimes-list lput (list random-xcor random-ycor) crimes-list
+    let px-coord random-xcor
+    let py-coord random-ycor
+    set crimes-list lput (list patch px-coord py-coord) crimes-list
 
-    let px-coord item 0 item i crimes-list
-    let py-coord item 1 item i crimes-list
 
     ask patch px-coord py-coord [ set pcolor red ]
-    ask patch px-coord (py-coord + 1) [set pcolor red] ; we make the surrounding patches red, for easier visual identification
-    ask patch px-coord (py-coord - 1) [set pcolor red]
-    ask patch (px-coord + 1) py-coord [set pcolor red]
-    ask patch (px-coord - 1) py-coord [set pcolor red]
+    ; we make the surrounding patches red as well, for easier visual identification
+    if patch px-coord (py-coord + 1) != nobody
+      [ask patch px-coord (py-coord + 1) [set pcolor red] ]
+    if patch px-coord (py-coord - 1) != nobody
+      [ask patch px-coord (py-coord - 1) [set pcolor red] ]
+    if patch (px-coord + 1) py-coord != nobody
+      [ask patch (px-coord + 1) py-coord [set pcolor red] ]
+    if patch (px-coord - 1) py-coord != nobody
+      [ask patch (px-coord - 1) py-coord [set pcolor red] ]
+
+
     set i i + 1
   ]
-  show crimes-list
+  ;;show crimes-list
 end
 
 ;to setup-litter
@@ -465,25 +480,118 @@ end
 ; police officers functions -----------------------------------------------------------------
 
 to setup-police
-  create-police-officers  200
+  create-police-officers  number-police-officers
   [
     setxy police-xcor police-ycor
     set station patch-here ; remember the home location of the agent
+
+    ;create an initial schedule for the first day of work, it will be then updated
+    set police-schedule table:make
+    let i 0
+    repeat (ticksperday + 1)
+    [
+      table:put police-schedule i station
+      set i i + 1
+    ]
+
     set shape "person police"
     set size 15
+    set speed 3 * resolution
   ]
+  ; for the day 0 ask police officers to compose their first schedule
+  ask police-officers [ schedule-police-officer-day who ]
+
 end
 
-to schedule-police-activities
+to schedule-police-officer-day [turtle-id] ; we use turtle-id because the ids of turtles are unique, regardless of the turtle's breed
+
+  ; since this procedure is called for day 0 and also for each other day, we here empty the schedule of the day (from the previous day's activities)
+  let i 0
+  repeat (ticksperday + 1)
+  [
+    table:put [police-schedule] of turtle turtle-id i station
+    set i i + 1
+  ]
+
+;  ; Plan a police-officer's shift
+;  let shift 6 ; hours. When the shift ends, police officers go back to the station (Note: needs to be a divider of 24)
+;  let time-per-crime max (list (shift / length crimes-list) (2) );hours (it will be then expanded so to take care of multiple things in addition to crimes)
+;  let start-time 0 ; the first shift starts at midnight
+;
+;
+;  ; for each shift set a schedule of problematic locations where to go
+;  repeat 24 / shift ; the number of shifts in a day
+;  [
+     ; check how to incorporate this with having multiple agents (repeat one per agent this procedure?)
+;    ; check that the crimes-list is not empty
+;    ; fill up the police schedule associated to the shift's time or ticks with all the crimes, until the shift is full (the shift time finishes-> probably use ifelse)
+;    ; as you put each location in the police-schedule as an activity of the officer, also remove it from the crimes-list (use replace primitive) so that the next officer will check the remianing crimes to visit
+;    ; restore the patch's color after the police has visited the patch
+;
+;
+;  ; for all crimes, a visit by a police officer is scheduled (crimes are assumed to have the highest priority)
+;  let j 0
+;  repeat length crimes-list
+;  [
+;    ; find the patch associated to the j-th crime
+;    let crime-location item j crimes-list
+;
+;    ; for all the ticks during which the crime visit takes place, a row of the schedule is filled with that activity
+;    repeat round (time-per-crime * 60 / resolution)
+;    [
+;      ; insert the activity at the given time
+;      table:put [police-schedule] of turtle turtle-id start-time crime-location
+;
+;      ; increase starttime by one tick
+;      set start-time start-time + 1
+;    ]
+;
+;  ]
+
+
+;  ; Plan new day - Assumption: Community workers visit the initiatives randomly
+;  let shift 8 ; hours. When the shift ends, police officers go back to the station
+;
+;  let locations-to-visit 1 + random 3 ; between 1 and 3 initiatives per day
+;  let time-per-initiative workingday / initiatives-to-visit
+;  let starttime round ((random-normal 10 1) * 60 / resolution)
+;
+;  ; Add initiatives to the schedule
+;  repeat initiatives-to-visit [
+;    let initiative-to-visit one-of patches with [category = "neighbourhood initiative"]
+;    repeat round (time-per-initiative * 60 / resolution)
+;    [
+;      ; insert the activity at the given time
+;      table:put [schedule] of turtle turtle-id starttime initiative-to-visit
+;
+;      ; increase starttime by one tick
+;      set starttime starttime + 1
+;    ]
+;  ]
+
+end
+
+
+
+to do-police-job [police-officer-id]
+ ;Get scheduled patch from police officer's shcedule
+;  let scheduled-patch table:get [police-schedule] of turtle turtle-id tickstoday
+;
+;  ifelse distance scheduled-patch > [speed] of turtle turtle-id [
+;    face scheduled-patch
+;    fd [speed] of turtle turtle-id
+;  ] [
+;    move-to scheduled-patch
+;  ]
 
 end
 
 
 @#$#@#$#@
 GRAPHICS-WINDOW
-234
+296
 10
-1057
+1119
 804
 -1
 -1
@@ -563,13 +671,6 @@ debug?
 1
 -1000
 
-OUTPUT
-1053
-12
-1664
-188
-12
-
 SLIDER
 12
 338
@@ -594,10 +695,25 @@ number-cw
 number-cw
 0
 10
-3.0
+2.0
 1
 1
 Community workers
+HORIZONTAL
+
+SLIDER
+13
+450
+276
+483
+number-police-officers
+number-police-officers
+0
+10
+2.0
+1
+1
+x4 Police officers
 HORIZONTAL
 
 @#$#@#$#@
@@ -985,7 +1101,7 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.1.0
+NetLogo 6.1.1
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
