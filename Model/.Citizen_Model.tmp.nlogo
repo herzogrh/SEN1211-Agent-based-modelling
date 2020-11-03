@@ -42,8 +42,12 @@ citizens-own [
   religious ; boolean, whether one is religious or not
   part-of-initiative ; boolean, whether one is part of an initiative or not
   house ; the home patch of the turtle
+<<<<<<< HEAD
   work ; save the working place as an agent variable to not calculate it each round
   initiative ; save the patch of the initiative the agent is taking part in
+=======
+  work ; stores the working place's patch as an agent variable so as not to calculate it at each round
+>>>>>>> bf50b95f18f3146eb0151dce9da3bacae6579b20
   schedule ; create a daily schedule that each agent adheres to
   qrcodes-scanned ; number of qr codes scanned by the agents
   speed ; in patches per tick (will be calculated with the resolution chosen)
@@ -134,9 +138,14 @@ end
 
 ; Citizen functions ----------------------------------------------------------------------
 to setup-citizens
+<<<<<<< HEAD
   create-citizens 5000 [
+=======
+  create-citizens 200
+  [
+>>>>>>> bf50b95f18f3146eb0151dce9da3bacae6579b20
     setxy random-xcor random-ycor
-    set children random-float 1 < 0.6 ; chance that one citizen has children is 60%
+    set children random-float 1 < 0.6 ; chance that one citizen has children is 60% (because we will draw a number that is less than 0.6 with a 60% chance; only in such case a True is returned)
     set job random-float 1 < 0.6 ; chance that one citizen has a job is 60% as well
     set religious random-float 1 < 0.5 ; chance that one citizen is religious is 50%
     set house patch-at 0 0 ; remember the home location of the agent
@@ -146,15 +155,17 @@ to setup-citizens
     set shape "person"
     set size 5
 
-    ; calculate the patch where the citizen works
-    if job [
+    ; if a citizen has a job, then determine the patch where the citizen works
+    if job
+    [
       ifelse (abs ((xcor / 815) - 0.5)) > abs ((ycor / 785) - 0.5 )
       [ ifelse (xcor / 815) > 0.5 [ set work patch 814 ycor ] [ set work patch 0 ycor ]]
       [ ifelse (ycor / 785) > 0.5 [ set work patch xcor 784 ] [ set work patch xcor 0 ]]
     ]
 
-    ; setup the schedule for each agent
+    ; for each citizen create an empty day schedule
     set schedule table:make
+<<<<<<< HEAD
     let i 0
     repeat (ticksperday + 1) [
       table:put schedule i "home"
@@ -169,6 +180,9 @@ to setup-citizens
       set part-of-initiative False
     ]
 
+=======
+    ;;show schedule
+>>>>>>> bf50b95f18f3146eb0151dce9da3bacae6579b20
   ]
 
   ask citizens [ schedule-day who ]
@@ -180,6 +194,7 @@ to live-life [turtle-id]
   ;Get current activity from schedule
   let current-activity table:get [schedule] of turtle turtle-id tickstoday
 
+<<<<<<< HEAD
   if (current-activity = "work") [
     ifelse distance [work] of turtle turtle-id > speed
     [
@@ -189,15 +204,27 @@ to live-life [turtle-id]
       move-to [work] of turtle turtle-id
     ]
 
+=======
+  if (current-activity = "work")
+  [
+    ;Check where am I
+    ; if !patch-of myself = work [
+    ; get difference of my patch and the work path
+    ; move towards work patch with a certain speed
+    ; set new patch of myself ]
+    move-to [work] of turtle turtle-id
+>>>>>>> bf50b95f18f3146eb0151dce9da3bacae6579b20
   ]
 
-  if (current-activity = "shopping") [
+
+  if (current-activity = "shopping")
+  [
     ;select one-of patches with[category = "supermarket"] with closest distance
     ;get difference between my patch and that patch, if not there yet
     ;move towards patch
-
   ]
 
+<<<<<<< HEAD
   if (current-activity = "home") [
     ifelse distance [house] of turtle turtle-id > speed
     [
@@ -208,6 +235,12 @@ to live-life [turtle-id]
     ]
 
 
+=======
+
+  if (current-activity = "home")
+  [
+    move-to [house] of turtle turtle-id
+>>>>>>> bf50b95f18f3146eb0151dce9da3bacae6579b20
   ]
 
   ;Interaction algorithm
@@ -221,30 +254,36 @@ end
 
 to schedule-day [turtle-id]
 
-  ; empty the schedule of the day
+  ; initialize the citizen's empty day schedule
   let i 0
-  repeat (ticksperday + 1) [
+  repeat (ticksperday + 1)
+  [
     table:put [schedule] of turtle turtle-id i "home"
     set i i + 1
   ]
+  ;;show [schedule] of turtle turtle-id
 
 
+  ; create an empty wish list where to put the compulsory and desired activities
+  ; each activity with its (foreseen) duration
   let activities-today table:make
+  ; as the citizen puts activities on its wish list, the utlized time of the day needs to increase
+  ; accordingly, this is kept track of with the variable below
   let timescheduled 0
 
-  ; in case of weekday, add the weekday activities
+  ; in case of a weekday, add weekday activities
   if (day < 6)
   [
-    ; in case the citizen has a job
+
+    ; in case the citizen has a job, a weekday activity is "working"
     if ([job] of turtle turtle-id)
     [
       let worktime random-normal 7 1
       table:put activities-today "work" worktime
       set timescheduled timescheduled + worktime
-
     ]
 
-    ; in case the citizen has children
+    ; in case the citizen has children, a weekday activity is "bringing children to school"
     if ([children] of turtle turtle-id)
     [
       let schooltime random-normal 1 0.5
@@ -255,9 +294,9 @@ to schedule-day [turtle-id]
   ]
 
 
-  ; applicable for all the days and based on chance
+  ; add activities which are applicable to all days
 
-  ;worship
+  ;worship, on average, is carried out once a week by a religious individual
   if ([religious] of turtle turtle-id and random 7 < 1)
     [
       let religioustime random-normal 1 0.5
@@ -288,12 +327,13 @@ to schedule-day [turtle-id]
 
 
 
-  ;get a start time for work, which is centered around the time they plan to soend on activities each day
-  ; "center" of the day is at 1300 -> substract half of timescheduled from it
+  ;get a start time for work (the first activity of the day), which is centered around the time they plan
+  ;to start on with the activities each day.
+  ; "center" of the day is at 13:00 -> substract half of timescheduled from it
 
   let starttime round (((random-normal 13 1) - timescheduled / 2) * 60 / resolution)
 
-  ;iterate over all activities
+  ;iterate over all activities of the wish list
   let row 0
   let activity-list table:keys activities-today
   let duration-list table:values activities-today
@@ -404,6 +444,10 @@ end
 
 
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> bf50b95f18f3146eb0151dce9da3bacae6579b20
 @#$#@#$#@
 GRAPHICS-WINDOW
 234
@@ -887,7 +931,7 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.1.0
+NetLogo 6.1.1
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
