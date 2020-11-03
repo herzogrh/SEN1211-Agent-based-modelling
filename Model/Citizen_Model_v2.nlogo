@@ -479,8 +479,6 @@ to schedule-police-activities
 end
 
 
-
-
 @#$#@#$#@
 GRAPHICS-WINDOW
 234
@@ -581,7 +579,7 @@ resolution
 resolution
 5
 60
-25.0
+60.0
 5
 1
 minutes/tick
@@ -596,7 +594,7 @@ number-cw
 number-cw
 0
 10
-10.0
+3.0
 1
 1
 Community workers
@@ -987,7 +985,7 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.1.1
+NetLogo 6.1.0
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
