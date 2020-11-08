@@ -153,11 +153,11 @@ end
 ; Citizen functions ----------------------------------------------------------------------
 to setup-citizens
   create-citizens number-citizens [
-    setxy random-xcor random-ycor
+    set house one-of patches with [pcolor = 7.9] ; remember the home location of the agent
+    setxy [pxcor] of house [pycor] of house ; set the agent's current spot on the map
     set children random-float 1 < 0.6 ; chance that one citizen has children is 60%
     set job random-float 1 < 0.6 ; chance that one citizen has a job is 60% as well
     set religious random-float 1 < 0.5 ; chance that one citizen is religious is 50%
-    set house patch-at 0 0 ; remember the home location of the agent
     set pls random-normal 40 10 ;
     set qrcodes-scanned 0;
     set speed 3 * resolution
@@ -594,7 +594,6 @@ end
 ;  ]
 
 ;end
-
 @#$#@#$#@
 GRAPHICS-WINDOW
 296
@@ -1109,7 +1108,7 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.1.1
+NetLogo 6.1.0
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
