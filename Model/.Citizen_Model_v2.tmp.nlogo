@@ -442,6 +442,7 @@ to setup-crimes
     let py-coord random-ycor
     set crimes-list lput [house] of one-of citizens crimes-list
 
+
     ask patch px-coord py-coord [ set pcolor red ]
     ; we make the surrounding patches red as well, for easier visual identification, only for the surrounding patches part of the map
     if patch px-coord (py-coord + 1) != nobody
