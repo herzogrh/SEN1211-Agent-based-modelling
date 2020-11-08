@@ -155,7 +155,9 @@ end
 to setup-citizens
   create-citizens number-citizens [
     set house one-of patches with [pcolor = 7.9] ; remember the home location of the agent
+
     setxy [pxcor] of house [pycor] of house
+>>>>>>> fb94d9db35753e6db1636907c8b057224ccc575d
     set children random-float 1 < 0.6 ; chance that one citizen has children is 60%
     set job random-float 1 < 0.6 ; chance that one citizen has a job is 60% as well
     set religious random-float 1 < 0.5 ; chance that one citizen is religious is 50%
