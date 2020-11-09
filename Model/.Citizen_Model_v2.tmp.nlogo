@@ -110,14 +110,10 @@ to setup-globals
   set ticksperday 1440 / resolution
   set tickstoday 0
 
-
-  set number-citizens 500
+  ; Global variable settings
+  set number-citizens 21000
   set viability-increase (0.2 / 60) * resolution
-
-  ; Community worker setup
   set community-center one-of patches with [category = "community centre"]
-
-
 
 end
 
@@ -140,7 +136,7 @@ to do-timekeeping
     [ set day day + 1 ]
 
     ;let all turtles schedule their day
-    ask citizens [ schedule-citizen-day who ]
+    ask citizens [ schedule-citizen-day ]
     ask community-workers [ schedule-community-worker-day who ]
 
     ; let the daily crimes occur
@@ -150,7 +146,8 @@ to do-timekeeping
     ;handle the initiative time
     ask patches with [category = "neighbourhood initiative"] [
       ifelse (initiative-time > 26 * 7) [
-        ; If  the initiative is older than half a year, let it die
+        ; If  the initiative is older than ha
+        slf a year, let it die
         set category ""
         set initiative-time 0
         set viability 0
@@ -181,7 +178,7 @@ to setup-citizens
     set qrcodes-scanned 0;
     set speed random-normal 3 1 * resolution ; speed depends on the resolution (unit: patch/minute)
     set shape "person"
-    set size 5
+    set size 2
 
     ; calculate the patch where the citizen works
     if job [ set work min-one-of patches with [(pxcor = 0) or (pycor = 0) or (pxcor = 814) or (pycor = 784)] [distance myself]  ]
@@ -204,7 +201,7 @@ to setup-citizens
 
   ]
 
-  ask citizens [ schedule-citizen-day who ]
+  ask citizens [ schedule-citizen-day ]
 
 end
 
@@ -263,7 +260,7 @@ end
 
 
 
-to schedule-citizen-day [turtle-id]
+to schedule-citizen-day []
 
   ; empty the schedule of the day
   let i 0
@@ -284,7 +281,6 @@ to schedule-citizen-day [turtle-id]
       let worktime random-normal 7 1
       table:put activities-today "work" worktime
       set timescheduled timescheduled + worktime
-
     ]
 
     ; in case the citizen has children

@@ -110,14 +110,10 @@ to setup-globals
   set ticksperday 1440 / resolution
   set tickstoday 0
 
-
-  set number-citizens 500
+  ; Global variable settings
+  set number-citizens 21000
   set viability-increase (0.2 / 60) * resolution
-
-  ; Community worker setup
   set community-center one-of patches with [category = "community centre"]
-
-
 
 end
 
@@ -181,7 +177,7 @@ to setup-citizens
     set qrcodes-scanned 0;
     set speed random-normal 3 1 * resolution ; speed depends on the resolution (unit: patch/minute)
     set shape "person"
-    set size 5
+    set size 2
 
     ; calculate the patch where the citizen works
     if job [ set work min-one-of patches with [(pxcor = 0) or (pycor = 0) or (pxcor = 814) or (pycor = 784)] [distance myself]  ]
