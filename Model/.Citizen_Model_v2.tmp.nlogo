@@ -17,6 +17,7 @@ globals [
   number-citizens ; amount of citizens, to specify in the setup-globals procedure
   overall-pls ; the mean value of all citizens' PLS index
   viability-increase ; the amount of viability that is increased per hour spent at an initiative
+  interaction-chance ; the chance that two agents that encounter each other on the street interact
 
   crimes-list ; list containing reported burglaries' locations, calling for police's attention
   litter-list ; list containing litter locations
@@ -94,7 +95,7 @@ to go
   do-timekeeping
 
   ; let all turtles live their lifes and do their jobs (citizens, community workers, police)
-  ask citizens [live-life who]
+  ask citizens [live-life]
   ask community-workers [do-job who]
 ;  ask police-officers [do-police-job who]
 
@@ -139,7 +140,7 @@ to do-timekeeping
     [ set day day + 1 ]
 
     ;let all turtles schedule their day
-    ask citizens [ schedule-day who ]
+    ask citizens [ schedule-citizen-day who ]
     ask community-workers [ schedule-community-worker-day who ]
 
     ; let the daily crimes occur
@@ -164,7 +165,7 @@ to do-timekeeping
 end
 
 to-report monitor-time
-  report (word "Day: " day " Time:" (tickstoday * resolution / 60))
+  report (word "Day (1 = Mo, 7 = Sun): " day " Time:" (floor (tickstoday * resolution / 60)) "\n Total Days: " totaldays)
 
 end
 
@@ -178,16 +179,12 @@ to setup-citizens
     set religious random-float 1 < 0.5 ; chance that one citizen is religious is 50%
     set pls random-normal 40 10 ;
     set qrcodes-scanned 0;
-    set speed 3 * resolution
+    set speed random-normal 3 1 * resolution ; speed depends on the resolution (unit: patch/minute)
     set shape "person"
     set size 5
 
     ; calculate the patch where the citizen works
-    if job [
-      ifelse (abs ((xcor / 815) - 0.5)) > abs ((ycor / 785) - 0.5 )
-      [ ifelse (xcor / 815) > 0.5 [ set work patch 814 ycor ] [ set work patch 0 ycor ]]
-      [ ifelse (ycor / 785) > 0.5 [ set work patch xcor 784 ] [ set work patch xcor 0 ]]
-    ]
+    if job [ set work min-one-of patches with [(pxcor = 0) or (pycor = 0) or (pxcor = 814) or (pycor = 784)] [distance myself]  ]
 
     ; setup the schedule for each agent
     set schedule table:make
@@ -207,64 +204,43 @@ to setup-citizens
 
   ]
 
-  ask citizens [ schedule-day who ]
+  ask citizens [ schedule-citizen-day who ]
 
 end
 
-to live-life [turtle-id]
+to live-life
 
   ;Get current activity from schedule
-  let current-activity table:get [schedule] of turtle turtle-id tickstoday
+  let current-activity table:get schedule tickstoday
 
-  if (current-activity = "work") [
-    ifelse distance [work] of turtle turtle-id > speed
-    [
-      face [work] of turtle turtle-id
-      fd speed
-    ] [
-      move-to [work] of turtle turtle-id
-    ]
+  ;Set the destination for this tick, default is citizen's house
+  let destination house
 
-  ]
+  ; Make agent move depending on the current activity
+  if (current-activity = "work") [ set destination work]
+  if (current-activity = "shopping") [ set destination min-one-of patches with [category = "supermarket"] [distance myself]]
+  if (current-activity = "initiative") [ set destination initiative]
+  if (current-activity = "worship") [ set destination min-one-of patches with [category = "religious"] [distance myself]]
 
-  if (current-activity = "shopping") [
-    let closest-supermarket min-one-of patches with [category = "supermarket"] [distance myself]
-
-    ifelse distance closest-supermarket > speed
-    [
-      face closest-supermarket
-      fd speed
-    ] [
-      move-to closest-supermarket
-    ]
-  ]
-
-  if (current-activity = "home") [
-    ifelse distance [house] of turtle turtle-id > speed
-    [
-      face [house] of turtle turtle-id
-      fd speed
-    ] [
-      move-to [house] of turtle turtle-id
-    ]
-  ]
-
-  if (current-activity = "walking") [
+  ; if the activity is walking, randomly roam around (but 1 tick slower than when having a destination)
+  ifelse (current-activity = "walking") [
     right random 360
-    fd speed
-
-  ]
-
-  if (current-activity = "initiative") [
-    ifelse distance [initiative] of turtle turtle-id > speed
-    [
-      face [initiative] of turtle turtle-id
+    fd speed - 1
+  ] [
+    ; else head towards the direction
+    ifelse distance destination > speed
+    [ ; if the distance to the destination is greater than the current speed, move towards the destination
+      face destination
       fd speed
-    ] [
-      move-to [initiative] of turtle turtle-id
-      ask [initiative] of turtle turtle-id [set viability viability + viability-increase]
-    ]
+    ] [ ;else go to the place
+      move-to destination
 
+      ; In case agent is at an initiative, higher the viability of the initiative
+      if (current-activity = "initiative") [
+        ask patch-here [set viability viability + viability-increase]
+      ]
+
+    ]
   ]
 
   ;Interaction algorithm
@@ -273,15 +249,26 @@ to live-life [turtle-id]
   ; QR code scanning algorithm
 
 
+
+  ; Let citizen start an initiative
+
+
 end
 
 
-to schedule-day [turtle-id]
+to show-children
+  show children
+end
+
+
+
+
+to schedule-citizen-day [turtle-id]
 
   ; empty the schedule of the day
   let i 0
   repeat (ticksperday + 1) [
-    table:put [schedule] of turtle turtle-id i "home"
+    table:put schedule i "home"
     set i i + 1
   ]
 
@@ -293,8 +280,7 @@ to schedule-day [turtle-id]
   if (day < 6)
   [
     ; in case the citizen has a job
-    if ([job] of turtle turtle-id)
-    [
+    if (job)[
       let worktime random-normal 7 1
       table:put activities-today "work" worktime
       set timescheduled timescheduled + worktime
@@ -302,38 +288,31 @@ to schedule-day [turtle-id]
     ]
 
     ; in case the citizen has children
-    if ([children] of turtle turtle-id)
-    [
+    if (children) [
       let schooltime random-normal 1 0.5
       table:put activities-today "school" schooltime
       set timescheduled timescheduled + schooltime
     ]
-
   ]
 
 
   ; applicable for all the days and based on chance
-
   ;worship
-  if ([religious] of turtle turtle-id and random 7 < 1)
-    [
+  if (religious and random 7 < 1) [
       let religioustime random-normal 1 0.5
       table:put activities-today "worship" religioustime
       set timescheduled timescheduled + religioustime
     ]
 
-
   ; shopping
-  if (random 7 < 3)
-  [
+  if (random 7 < 3) [
     let shoppingtime random-normal 1.5 0.5
     table:put activities-today "shopping" shoppingtime
     set timescheduled timescheduled + shoppingtime
   ]
 
     ; intitative
-  if ([part-of-initiative] of turtle turtle-id and random 7 < 1)
-  [
+  if (part-of-initiative and random 7 < 1) [
     let initiativetime random-normal 2 0.5
     table:put activities-today "initiative" initiativetime
     set timescheduled timescheduled + initiativetime
@@ -341,14 +320,11 @@ to schedule-day [turtle-id]
 
 
   ; recreational walk
-  if (random 7 < 2)
-  [
+  if (random 7 < 2) [
     let walktime random-normal 2 0.5
     table:put activities-today "walking" walktime
     set timescheduled timescheduled + walktime
   ]
-
-
 
 
   ;get a start time for work, which is centered around the time they plan to soend on activities each day
@@ -361,17 +337,15 @@ to schedule-day [turtle-id]
   let activity-list table:keys activities-today
   let duration-list table:values activities-today
 
-  repeat table:length activities-today
-  [
+  repeat table:length activities-today [
     ; get activity and duration
     let activity item row activity-list
     let duration item row duration-list
 
     ;schedule the activity in the daily schedule
-    repeat round (duration * 60 / resolution)
-    [
+    repeat round (duration * 60 / resolution) [
       ; insert the activity at the given time
-      table:put [schedule] of turtle turtle-id starttime activity
+      table:put schedule starttime activity
 
       ; increase starttime by one tick
       set starttime starttime + 1
@@ -626,13 +600,13 @@ end
 
 @#$#@#$#@
 GRAPHICS-WINDOW
-296
+549
 10
-1119
-804
+1402
+833
 -1
 -1
-1.0
+1.037
 1
 10
 1
@@ -717,17 +691,17 @@ resolution
 resolution
 5
 60
-60.0
+30.0
 5
 1
 minutes/tick
 HORIZONTAL
 
 SLIDER
-11
-197
-281
-230
+12
+232
+282
+265
 number-cw
 number-cw
 0
@@ -739,10 +713,10 @@ Community workers
 HORIZONTAL
 
 SLIDER
-11
-233
-280
-266
+12
+268
+281
+301
 number-police-officers
 number-police-officers
 0
@@ -754,10 +728,10 @@ officers on screen
 HORIZONTAL
 
 MONITOR
-102
-10
-221
-55
+200
+34
+488
+79
 Timekeeping
 monitor-time
 17
@@ -766,21 +740,42 @@ monitor-time
 
 PLOT
 12
-290
-212
-440
-Viability of Initiatives
-time
-Viabiliy
+377
+414
+610
+Average PLS and Viability
+Time [Ticks]
+Via/PLS
 0.0
 10.0
 0.0
 100.0
 true
-false
+true
 "" ""
 PENS
-"default" 1.0 0 -16777216 true "" "plot mean [viability] of patches with [category = \"neighbourhood initiative\"]"
+"Average Initiative Viability" 1.0 0 -16777216 true "" "plot mean [viability] of patches with [category = \"neighbourhood initiative\"]"
+"Average PLS" 1.0 0 -13840069 true "" "plot mean [pls] of citizens"
+
+TEXTBOX
+13
+104
+163
+122
+General Settings
+11
+0.0
+1
+
+TEXTBOX
+15
+215
+165
+233
+Policy Levers
+11
+0.0
+1
 
 @#$#@#$#@
 ## WHAT IS IT?
