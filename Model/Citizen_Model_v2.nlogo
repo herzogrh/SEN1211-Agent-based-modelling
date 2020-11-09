@@ -1297,6 +1297,28 @@ NetLogo 6.1.0
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
+<experiments>
+  <experiment name="experiment" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <metric>count turtles</metric>
+    <enumeratedValueSet variable="debug?">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-cw">
+      <value value="2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="verbose?">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="resolution">
+      <value value="60"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-police-officers">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+</experiments>
 @#$#@#$#@
 @#$#@#$#@
 default
