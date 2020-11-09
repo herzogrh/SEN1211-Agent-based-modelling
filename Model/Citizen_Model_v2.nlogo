@@ -146,6 +146,7 @@ to do-timekeeping
 
     ;add one day to all the initiatives
     ask patches with [category = "neighbourhood initiative"] [set initiative-time initiative-time + 1]
+
     ]
 
 end
@@ -1082,6 +1083,28 @@ NetLogo 6.1.1
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
+<experiments>
+  <experiment name="experiment" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <metric>count turtles</metric>
+    <enumeratedValueSet variable="debug?">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-cw">
+      <value value="2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="verbose?">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="resolution">
+      <value value="60"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-police-officers">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+</experiments>
 @#$#@#$#@
 @#$#@#$#@
 default

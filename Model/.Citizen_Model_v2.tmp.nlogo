@@ -142,6 +142,7 @@ to do-timekeeping
 
     ; let the daily crimes occur
     setup-crimes
+
     ask police-officers [ schedule-police-officer-day who ]
 
     ;add one day to all the initiatives
@@ -543,25 +544,26 @@ to schedule-police-officer-day [turtle-id] ; we use turtle-id because the ids of
 
 end
 
-; find the nearest problem youth to go to
-    let next-target-patch min-one-of (patches in-radius 25 with [pcolor = 9.9]) [distance myself]
-    if next-target-patch != nobody
-    [
-      move-to next-target-patch
-    ]
 
-to do-police-job [police-officer-id]
- ;Get scheduled patch from police officer's shcedule
-  let crime-location table:get schedule tickstoday
 
-  ifelse distance scheduled-patch > [speed] of turtle turtle-id [
-    face scheduled-patch
-    fd [speed] of turtle turtle-id
-  ] [
-    move-to scheduled-patch
-  ]
-
-end
+;to do-police-job [police-officer-id]
+; ;Get scheduled patch from police officer's shcedule
+;  let crime-location table:get schedule tickstoday
+;
+;  ifelse distance scheduled-patch > [speed] of turtle turtle-id [
+;    face scheduled-patch
+;    fd [speed] of turtle turtle-id
+;  ] [
+;    move-to scheduled-patch
+;  ]
+;  ; find the nearest problem youth to go to
+;    let next-target-patch min-one-of (patches in-radius 25 with [pcolor = 9.9]) [distance myself]
+;    if next-target-patch != nobody
+;    [
+;      move-to next-target-patch
+;    ]
+;
+;end
 
 @#$#@#$#@
 GRAPHICS-WINDOW
@@ -1081,6 +1083,28 @@ NetLogo 6.1.1
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
+<experiments>
+  <experiment name="experiment" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <metric>count turtles</metric>
+    <enumeratedValueSet variable="debug?">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-cw">
+      <value value="2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="verbose?">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="resolution">
+      <value value="60"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-police-officers">
+      <value value="2"/>
+    </enumeratedValueSet>
+  </experiment>
+</experiments>
 @#$#@#$#@
 @#$#@#$#@
 default
