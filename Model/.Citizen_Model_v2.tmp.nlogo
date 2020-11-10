@@ -255,7 +255,7 @@ end
 ;-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 to setup-citizens [number]
-  create-citizens inumber [
+  create-citizens item 0 number [
     set house one-of patches with [pcolor = 7.9] ; remember the home location of the agent
     setxy [pxcor] of house [pycor] of house
     set children random-float 1 < 0.6 ; chance that one citizen has children is 60%
@@ -626,7 +626,7 @@ end
 
 
 to setup-problem-youth [number]
-  create-problem-youth number [
+  create-problem-youth item 0 number [
     setxy random-pxcor random-pycor
     set shape "problem youngster"
     set size 15
@@ -767,7 +767,7 @@ to schedule-police-officer-day [turtle-id] ; we use turtle-id because the ids of
       set start-time start-time + 1
       ]
     ]
-    show schedule
+
 
   ]
 

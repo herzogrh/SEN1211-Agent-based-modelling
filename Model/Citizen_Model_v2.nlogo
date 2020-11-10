@@ -767,7 +767,6 @@ to schedule-police-officer-day [turtle-id] ; we use turtle-id because the ids of
       set start-time start-time + 1
       ]
     ]
-    show schedule
 
   ]
 
