@@ -1,4 +1,4 @@
-__includes [ "utilities.nls" ] ; all the boring but important stuff not related to content
+__includes [ "utilities.nls"] ; all the boring but important stuff not related to content
 extensions [ csv table ]
 
 
@@ -13,15 +13,17 @@ globals [
   totaldays ; total runtime in days of the system
   ticksperday ; calculated by the user's resolution input
   tickstoday ; count of the numbers of ticks on one day
+  number-citizens ; amount of citizens, to specify in the setup-globals procedure
+  pls-average ; save the pls average once per day for performance reasons
+  viability-average ; save the viability average once per day for performance reasons
 
-  number-citizens ; total number of citizens, to be specified in the setup-globals procedure
-  overall-pls ; the mean value of all citizens' PLS index
-  viability-increase ; the amount of viability that is increased per hour spent at an initiative
-  interaction-chance ; the chance that two agents that encounter each other on the street interact
+  ; Increases of Viability and PLS are all relative to a set "little increse". Medium increases are defined as two little increases and large increases as three little increases
+  viability-increase-little ; a little viability increase (per hour spent at an initiative)
+  pls-increase-little ; a little pls increase
+  qr-scanning-chance ; the chance that a citizen scans a QR code at a specific location
 
   number-problem-youth ; total number of youngsters associated to problem youth, to be specified in the setup-globals procedure
   community-center ; stores the patch of the community center
-  cw-viability-increase ; the amount the viability of an initative increases in case a community worker visits
 ]
 
 
@@ -52,8 +54,10 @@ citizens-own [
   house ; the home patch of the turtle
   work ; save the working place as an agent variable to not calculate it each round
   initiative ; save the patch of the initiative the agent is taking part in
+  school ; patch where children of a citizen go to school
   schedule ; create a daily schedule that each agent adheres to
   qrcodes-scanned ; number of qr codes scanned by the agents
+  initiative-threshold ; the amount of qr-codes that a citizen needs to scan before they start an initiative
   speed ; in patches per tick (will be calculated with the resolution chosen)
 ]
 
@@ -104,58 +108,70 @@ to setup
   reset-ticks
 end
 
-; Go Function --------------------------------------------------------------------------------------------------------------------------------
+
 to go
   ; do timekeeping
   do-timekeeping
+  ; stop simulation after 3 years
+  if (totaldays > 3 * 365) [stop]
 
   ; let all turtles live their lifes and do their jobs (citizens, community workers, police)
   ask citizens [live-life]
-  ask community-workers [do-job who]
+  ask community-workers [do-community-worker-job]
   ask problem-youth [hang-around]
   ask police-officers [do-police-job]
   ask waste-collectors [collect-waste]
+
+  ; ask all turtles to interact with each other
+  ask turtles [interact]
 
   tick ; next time step
 end
 
 
-; Setup globals variables ------------------------------------------------------------------------------------------------
+
 to setup-globals
   ; Timekeeping setup
   set day 0
+  set totaldays 0
   set ticksperday 1440 / resolution
   set tickstoday 0
 
   ; Global variable settings
-  set number-citizens 210
-  set viability-increase (0.2 / 60) * resolution
+  set number-citizens 1000
+  set viability-increase-little (0.2 / 60) * resolution
+  set pls-increase-little 1
+  set qr-scanning-chance 0.1
   set community-center one-of patches with [category = "community centre"]
   set number-problem-youth 60
 
 end
 
 
-
-
-; Timekeeping
 to do-timekeeping
   ifelse (tickstoday < ticksperday)
   ; in case the day is not yet finished
   [set tickstoday tickstoday + 1]
 
   ; in case the day is finished, advance one day and let citizens reschedule their day
-  [set tickstoday 0
-    ; add one day to the total number of days
-    set totaldays totaldays + 1
+  [
+    set tickstoday 0 ; reset ticks of the day
+    set totaldays totaldays + 1 ; add one day to the total number of days
 
-    ; in case it is sunday, set day to monday
+    ; in case it is sunday, set day to monday, otherwise increse weekday count
     ifelse (day = 7) [ set day 1]
     [ set day day + 1 ]
 
-    ;let all turtles schedule their day
-    ask citizens [ schedule-citizen-day ]
-    ask community-workers [ schedule-community-worker-day who ]
+    ; set the averages for performance reasons
+    set pls-average mean [pls] of citizens
+    set viability-average mean [viability] of patches with [category = "neighboudhood initiative"]
+
+    ;let all turtles schedule their day (and citizens to possibly start an initiative, if conditions are given
+    ask citizens [
+      schedule-citizen-day
+      start-initiative
+    ]
+    ask community-workers [ schedule-community-worker-day ]
 
     ; let the daily crimes occur and litter be produced
     setup-crimes
@@ -164,11 +180,18 @@ to do-timekeeping
 
     ;handle the initiative time
     ask patches with [category = "neighbourhood initiative"] [
-      ifelse (initiative-time > 26 * 7) [
-        ; If  the initiative is older than half a year, let it die
-        set category ""
+      ifelse (initiative-time > 26 * 7) or (viability <= 0) [
+        ; If  the initiative is older than half a year or the viability is below 0, let it die
+        set category 0
         set initiative-time 0
         set viability 0
+
+        ; remove all citizens from that initiative
+        ask citizens with [initiative = myself][
+          set part-of-initiative False
+          set initiative 0
+        ]
+
       ][
         ; Else increase the time that the initiative existed and decrease the viability
         set initiative-time initiative-time + 1
@@ -184,7 +207,38 @@ to-report monitor-time
 
 end
 
-; Citizen functions ----------------------------------------------------------------------
+
+to interact
+
+  let citizens-to-interact citizens in-radius 5  ; create an agentset with all citizens in a given radius
+
+  ; take the variable from the slider as a basic interaction chance for citizens & make it dependent on the average pls, which caps the pecentage of interactions possible
+  let chance-to-interact ((interaction-chance / 100) * (pls-average / 100))
+  if breed = community-workers [set chance-to-interact 1] ; community workers will always speak to citizens
+  if breed = police-officers [set chance-to-interact (1 - (pls-average / 100))] ; police workers solely interact upon the average perceived pls (always interact when average is 0, never interact when average is 100
+  ;  if breed = garbage-collectors [set chance-to-interact 0] -> no interaction with them
+
+  ; only do interactions if there are agents to interact with and the chance of interaction is fulfilled
+  if (any? citizens-to-interact) and (random-float 1 < chance-to-interact) [
+    let citizen-to-interact one-of citizens-to-interact ;select one person to interact with
+
+    ifelse (breed = citizens) [
+      set pls pls + pls-increase-little  ; higher own pls by a little, if interaction is successful
+      ask citizen-to-interact [set pls pls + pls-increase-little] ; higher the pls of the other person by a little
+    ] [
+      ask citizen-to-interact [set pls pls + (3 * pls-increase-little)]] ; higher the amount of pls of the other person by a lot
+  ]
+
+
+end
+
+
+
+
+;-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+; Citizen Functions-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+;-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
 to setup-citizens
   create-citizens number-citizens [
     set house one-of patches with [pcolor = 7.9] ; remember the home location of the agent
@@ -193,13 +247,15 @@ to setup-citizens
     set job random-float 1 < 0.6 ; chance that one citizen has a job is 60% as well
     set religious random-float 1 < 0.5 ; chance that one citizen is religious is 50%
     set pls random-normal 40 10 ;
-    set qrcodes-scanned 0;
+    set qrcodes-scanned max list (0) (round random-normal 15 10); assumption: in the beginning, each citizen scanned around 5-25 QR codes
+    set initiative-threshold random-normal 40 5 ; assumption: a citizens needs around 35-45 QR codes scanned to start an initiative
     set speed random-normal 3 1 * resolution ; speed depends on the resolution (unit: patch/minute)
     set shape "person"
-    set size 2
+    set size 5
 
-    ; calculate the patch where the citizen works
-    if job [ set work min-one-of patches with [(pxcor = 0) or (pycor = 0) or (pxcor = 814) or (pycor = 784)] [distance myself]  ]
+    ; calculate the patch where the citizen works and where their children go to school
+    if job [ set work min-one-of patches with [(pxcor = 0) or (pycor = 0) or (pxcor = 814) or (pycor = 784)] [distance myself] ]
+    if children [set school min-one-of patches with [category = "school"] [distance myself] ]
 
     ; setup the schedule for each agent
     set schedule table:make
@@ -221,6 +277,8 @@ to setup-citizens
 
   ask citizens [ schedule-citizen-day ]
 
+  set pls-average mean [pls] of citizens
+
 end
 
 to live-life
@@ -234,8 +292,16 @@ to live-life
   ; Make agent move depending on the current activity
   if (current-activity = "work") [ set destination work]
   if (current-activity = "shopping") [ set destination min-one-of patches with [category = "supermarket"] [distance myself]]
-  if (current-activity = "initiative") [ set destination initiative]
   if (current-activity = "worship") [ set destination min-one-of patches with [category = "religious"] [distance myself]]
+  if (current-activity = "initiative") [
+    ifelse part-of-initiative [ set destination initiative  ][
+      ; If citizens are not yet part of an initiative, assign them to the closest
+      let closest-initiative min-one-of patches with [category = "neighbourhood initiative"][distance myself]
+      set part-of-initiative True
+      set initiative closest-initiative
+      set destination closest-initiative
+    ]
+    ]
 
   ; if the activity is walking, randomly roam around (but 1 tick slower than when having a destination)
   ifelse (current-activity = "walking") [
@@ -252,31 +318,35 @@ to live-life
 
       ; In case agent is at an initiative, higher the viability of the initiative
       if (current-activity = "initiative") [
-        ask patch-here [set viability viability + viability-increase]
+        ask patch-here [set viability viability + viability-increase-little]
       ]
 
     ]
   ]
 
-  ;Interaction algorithm
+  ; Interaction algorithm
+  interact
 
 
   ; QR code scanning algorithm
+  ; Sometimes forget about QR codes already scanned (TO Discuss)
 
+  ; In case they are willing to scan something
+  if (random-float 1 < qr-scanning-chance) [
+    ; In case there's any QR codes nearby
+    if (count patches with [category != 0] in-radius 3  > 0) [
+      ; Increase the QR code counter
+      set qrcodes-scanned qrcodes-scanned + 1
 
+      ; Handle PLS-increase (either none, little or medium)
+      set pls (pls + random 3 * pls-increase-little)
 
-  ; Let citizen start an initiative
+    ]
+  ]
+
 
 
 end
-
-
-to show-children
-  show children
-end
-
-
-
 
 to schedule-citizen-day []
 
@@ -325,8 +395,8 @@ to schedule-citizen-day []
     set timescheduled timescheduled + shoppingtime
   ]
 
-    ; intitative
-  if (part-of-initiative and random 7 < 1) [
+  ; join intitative
+  if  (random 7 < 1) [
     let initiativetime random-normal 2 0.5
     table:put activities-today "initiative" initiativetime
     set timescheduled timescheduled + initiativetime
@@ -374,8 +444,38 @@ to schedule-citizen-day []
 
 end
 
+; Let citizen start an initiative
+to start-initiative
+  ;                                                                                                  Conditions:
+  if ((qrcodes-scanned > initiative-threshold) and                                                   ;(1) Citizens must have scanned a certain number of QR codes,
+    (random 100 + 1 > pls-average)  and                                                              ;(2) the higher the PLS, the lower the chance that one takes action and
+    (number-supported-initiatives > count patches with [category = "neighbourhood initiative"] )) [  ;(3) the municipality must have capacity to support another initiative
 
-; Community Worker functions ----------------------------------------------------------------------
+    ; Start initiative at a random patch
+    let new-initiative-patch patch random-pxcor random-pycor
+
+    ; Setup the new initiative patch
+    ask new-initiative-patch [
+      set category "neighbourhood initiative"
+      set viability floor (random-normal 30 5) ; give initiative an initial variable viability
+      set initiative-time 0
+    ]
+
+    ; Let the agent join the initiative
+    set part-of-initiative True
+    set initiative new-initiative-patch
+
+  ]
+
+
+end
+
+
+
+;-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+; Community Worker related Functions-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+;-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
 to setup-community-workers
   create-community-workers number-cw [
 
@@ -391,16 +491,16 @@ to setup-community-workers
     set size 10
   ]
 
-  ask community-workers [ schedule-community-worker-day who ]
+  ask community-workers [ schedule-community-worker-day ]
 
 end
 
 
-to schedule-community-worker-day [turtle-id]
+to schedule-community-worker-day
   ; empty the schedule of the day
   let i 0
   repeat (ticksperday + 1) [
-    table:put [schedule] of turtle turtle-id i community-center
+    table:put schedule i community-center
     set i i + 1
   ]
 
@@ -416,7 +516,7 @@ to schedule-community-worker-day [turtle-id]
     repeat round (time-per-initiative * 60 / resolution)
     [
       ; insert the activity at the given time
-      table:put [schedule] of turtle turtle-id starttime initiative-to-visit
+      table:put schedule starttime initiative-to-visit
 
       ; increase starttime by one tick
       set starttime starttime + 1
@@ -425,22 +525,21 @@ to schedule-community-worker-day [turtle-id]
 
 end
 
-to do-job [turtle-id]
+to do-community-worker-job
   ;Get scheduled patch from community worker
-  let scheduled-patch table:get [schedule] of turtle turtle-id tickstoday
+  let scheduled-patch table:get schedule tickstoday
 
-  ifelse distance scheduled-patch > [speed] of turtle turtle-id [
+  ifelse distance scheduled-patch > speed [
     face scheduled-patch
-    fd [speed] of turtle turtle-id
+    fd speed
   ] [
     move-to scheduled-patch
-    ask scheduled-patch [set viability (viability + 2 * viability-increase)]
+    ask scheduled-patch [set viability (viability + 2 * viability-increase-little)]
   ]
 
 end
 
 
-; Initiative functions ----------------------------------------------------------------------
 to setup-initiatives
   ; set initial viability of each initiative with a max of 100 and a min of 0
   ask patches with [category = "neighbourhood initiative"] [
@@ -448,13 +547,19 @@ to setup-initiatives
     set initiative-time 0
   ]
 
+  ; set the global average for performace reasons
+  set viability-average mean [viability] of patches with [category = "neighbourhood initiative"]
+
 end
 
 
 
 
 
-; ploblematic locations' functions ---------------------------------------------------------
+;-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+; Police related Functions-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+;-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
 to setup-crimes
   ; the surface area of Bouwlust is approximately 2.4 km2
   ; the poulation density of The Hague is 6523 people/km2
@@ -766,10 +871,10 @@ ticks
 30.0
 
 BUTTON
-10
-10
-83
-43
+11
+40
+84
+73
 NIL
 setup
 NIL
@@ -783,10 +888,10 @@ NIL
 1
 
 BUTTON
-11
-47
+96
+41
+159
 74
-80
 NIL
 go
 T
@@ -806,7 +911,7 @@ SWITCH
 155
 verbose?
 verbose?
-0
+1
 1
 -1000
 
@@ -817,14 +922,14 @@ SWITCH
 156
 debug?
 debug?
-0
+1
 1
 -1000
 
 SLIDER
 11
 160
-279
+195
 193
 resolution
 resolution
@@ -837,10 +942,10 @@ minutes/tick
 HORIZONTAL
 
 SLIDER
-12
-232
+10
 282
-265
+280
+315
 number-cw
 number-cw
 0
@@ -852,25 +957,25 @@ Community workers
 HORIZONTAL
 
 SLIDER
-12
-268
-281
-301
+10
+318
+279
+351
 number-police-officers
 number-police-officers
 0
 10
-2.0
+1.0
 1
 1
 Officers
 HORIZONTAL
 
 MONITOR
-200
-34
-488
-79
+9
+448
+412
+493
 Timekeeping
 monitor-time
 17
@@ -878,10 +983,10 @@ monitor-time
 11
 
 PLOT
-12
-377
-414
-610
+10
+496
+412
+616
 Average PLS and Viability
 Time [Ticks]
 Via/PLS
@@ -893,8 +998,8 @@ true
 true
 "" ""
 PENS
-"Average Initiative Viability" 1.0 0 -16777216 true "" "plot mean [viability] of patches with [category = \"neighbourhood initiative\"]"
-"Average PLS" 1.0 0 -13840069 true "" "plot mean [pls] of citizens"
+"Average Initiative Viability" 1.0 0 -16777216 true "" "plot viability-average"
+"Average PLS" 1.0 0 -13840069 true "" "plot pls-average"
 
 TEXTBOX
 13
@@ -907,20 +1012,20 @@ General Settings
 1
 
 TEXTBOX
-15
-215
-165
-233
+13
+265
+163
+283
 Policy Levers
 11
 0.0
 1
 
 SLIDER
-14
-309
-287
-342
+9
+393
+282
+426
 number-waste-collectors
 number-waste-collectors
 0
@@ -929,6 +1034,36 @@ number-waste-collectors
 1
 1
 Waste collectors
+HORIZONTAL
+
+SLIDER
+10
+196
+192
+229
+interaction-chance
+interaction-chance
+0
+100
+49.0
+1
+1
+%
+HORIZONTAL
+
+SLIDER
+10
+355
+279
+388
+number-supported-initiatives
+number-supported-initiatives
+0
+25
+10.0
+1
+1
+Initiatives
 HORIZONTAL
 
 @#$#@#$#@
