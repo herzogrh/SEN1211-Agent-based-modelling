@@ -15,6 +15,9 @@ globals [
   tickstoday ; count of the numbers of ticks on one day
 
   pls-average ; save the pls average once per day for performance reasons
+  pls-max ;
+  pls-min
+  pls-normalized
   viability-average ; save the viability average once per day for performance reasons
 
   ; Increases of Viability and PLS are all relative to a set "little increse". Medium increases are defined as two little increases and large increases as three little increases
@@ -96,7 +99,7 @@ to setup
 
   ; Setup of turtles and patches
   setup-globals
-  setup-citizens [1000]
+  setup-citizens [100]
   setup-initiatives
   setup-community-workers
   setup-crimes
@@ -115,7 +118,7 @@ to go
   ; stop simulation after 3 years
   if (totaldays > 3 * 365) [stop]
   ; update pls average
-  set pls-average mean [pls] of citizens
+  set pls-average median [pls] of citizens
 
   ; let all turtles live their lifes and do their jobs (citizens, community workers, police)
   ask citizens [live-life]
@@ -151,7 +154,9 @@ end
 to do-timekeeping
   ifelse (tickstoday < ticksperday)
   ; in case the day is not yet finished
-  [set tickstoday tickstoday + 1]
+  [
+    set tickstoday tickstoday + 1
+  ]
 
   ; in case the day is finished, advance one day and let citizens reschedule their day
   [
@@ -163,8 +168,18 @@ to do-timekeeping
     [ set day day + 1 ]
 
     ; set the averages for performance reasons
-    set pls-average mean [pls] of citizens
-    set viability-average mean [viability] of patches with [category = "neighboudhood initiative"]
+    ; set pls-average mean [pls] of citizens
+    ;;set pls-average mean [pls] of citizens
+    set pls-average  [pls] of citizens
+    set pls-max max [pls] of citizens
+    set pls-min min [pls] of citizens
+    set pls-normalized (pls-average - pls-min) * 100 / (pls-max - pls-min)
+
+;    (avg - min) : max - min    =       x : 100 - 0
+;    x = (avg - min) * 100 / (max - min)
+
+
+    set viability-average mean [viability] of patches with [category = "neighbourhood initiative"]
 
     ;let all turtles schedule their day (and citizens to possibly start an initiative, if conditions are given
     ask citizens [
@@ -768,7 +783,6 @@ to schedule-police-officer-day [turtle-id] ; we use turtle-id because the ids of
       ]
     ]
 
-
   ]
 
 end
@@ -957,7 +971,7 @@ resolution
 resolution
 5
 60
-30.0
+60.0
 5
 1
 minutes/tick
@@ -1022,6 +1036,8 @@ true
 PENS
 "Average Initiative Viability" 1.0 0 -16777216 true "" "plot viability-average"
 "Average PLS" 1.0 0 -13840069 true "" "plot pls-average"
+"Max PLS" 1.0 0 -7500403 true "" "plot pls-max"
+"Min PLS" 1.0 0 -2674135 true "" "plot pls-min"
 
 TEXTBOX
 13
@@ -1087,6 +1103,25 @@ number-supported-initiatives
 1
 Initiatives
 HORIZONTAL
+
+PLOT
+10
+621
+411
+809
+Normalized PLS
+Time [Ticks]
+average PLS
+0.0
+10.0
+0.0
+120.0
+true
+true
+"" ""
+PENS
+"Normalized PLS" 1.0 0 -5298144 true "" "plot pls-normalized"
+"PLS range" 1.0 0 -7500403 true "" "plot (pls-max - pls-min)"
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -1504,7 +1539,7 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.1.0
+NetLogo 6.1.1
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
