@@ -14,13 +14,12 @@ globals [
   ticksperday ; calculated by the user's resolution input
   tickstoday ; count of the numbers of ticks on one day
 
-  number-citizens ; amount of citizens, to specify in the setup-globals procedure
+  number-citizens ; total number of citizens, to be specified in the setup-globals procedure
   overall-pls ; the mean value of all citizens' PLS index
   viability-increase ; the amount of viability that is increased per hour spent at an initiative
   interaction-chance ; the chance that two agents that encounter each other on the street interact
 
-  crimes-list ; list containing reported burglaries' locations, calling for police's attention
-  litter-list ; list containing litter locations
+  number-problem-youth ; total number of youngsters associated to problem youth, to be specified in the setup-globals procedure
   community-center ; stores the patch of the community center
   cw-viability-increase ; the amount the viability of an initative increases in case a community worker visits
 ]
@@ -30,6 +29,8 @@ globals [
 breed [citizens citizen]
 breed [community-workers community-worker]
 breed [police-officers police-officer]
+breed [waste-collectors waste-collector]
+breed [problem-youth problem-youngster]
 
 
 ; Agent Variables -----------------------------------------------------------------------
@@ -62,12 +63,24 @@ community-workers-own [
   speed ; speed at which they move forward in patches per tick (will be calculated with the resolution chosen)
 ]
 
-police-officers-own[
-  police-schedule; daily schedule with problems to visit
+police-officers-own [
   station ; the station patch of a police officer
   speed ; in patches per tick (will be calculated with the resolution chosen)
-  police-schedule ; daily schedule with crimes locations to go to
+  schedule ; daily schedule with crimes locations to go to
 ]
+
+waste-collectors-own [
+  start-working-day ; beginning tick of the working day
+  end-working-day  ; ending tick of the working day
+  speed ; in patches per tick (will be calculated with the resolution chosen)
+
+]
+
+problem-youth-own [
+  speed ; in patches per tick (will be calculated with the resolution chosen)
+  target-patch ; the location where to go next
+]
+
 
 ; Setup -----------------------------------------------------------------------------------------------------------------
 to setup
@@ -83,8 +96,10 @@ to setup
   setup-initiatives
   setup-community-workers
   setup-crimes
+  setup-litter
+  setup-waste-collectors
   setup-police
-  ;setup-litter
+  setup-problem-youth
 
   reset-ticks
 end
@@ -97,7 +112,9 @@ to go
   ; let all turtles live their lifes and do their jobs (citizens, community workers, police)
   ask citizens [live-life]
   ask community-workers [do-job who]
-;  ask police-officers [do-police-job who]
+  ask problem-youth [hang-around]
+  ask police-officers [do-police-job]
+  ask waste-collectors [collect-waste]
 
   tick ; next time step
 end
@@ -111,9 +128,10 @@ to setup-globals
   set tickstoday 0
 
   ; Global variable settings
-  set number-citizens 21000
+  set number-citizens 210
   set viability-increase (0.2 / 60) * resolution
   set community-center one-of patches with [category = "community centre"]
+  set number-problem-youth 60
 
 end
 
@@ -139,8 +157,9 @@ to do-timekeeping
     ask citizens [ schedule-citizen-day ]
     ask community-workers [ schedule-community-worker-day who ]
 
-    ; let the daily crimes occur
+    ; let the daily crimes occur and litter be produced
     setup-crimes
+    setup-litter
     ask police-officers [ schedule-police-officer-day who ]
 
     ;handle the initiative time
@@ -444,48 +463,104 @@ to setup-crimes
   ; or equivalently, a daily figure of 3.1 r.c./day
   ; note: this is only an average figure since using spacially and termporally averaged data as inputs.
 
-
-  ; create a list having two-element lists (x-cor, y-cor) as items
-  ; the number of such items is initially 3, but will then be determined by the overall PLS (STILL TO BE DONE)
-  set crimes-list []
-
-  let i 0
+ ; the number of crimes is initially 3, but will then be determined by the overall PLS (STILL TO BE DONE)
   repeat random-normal 3 1
   [
-    ; for crimes a "first in fist out" logic is used
-
+    ; burglaries can occur only at citizens' homes
     let crime-location [house] of one-of citizens
-
-    set crimes-list lput crime-location crimes-list
 
     let px-coord [pxcor] of crime-location
     let py-coord [pycor] of crime-location
 
+    ; burglaries will be visualized as red patches on the map
     ask patch px-coord py-coord [ set pcolor red ]
-
-
-    set i i + 1
   ]
-  show crimes-list
+  ; show crimes-list
 end
 
-;to setup-litter
-;  set litter-list []
-;
-;  let i 0
-;  repeat random-normal 50 1
-;  [
-;    ; for crimes a "first in fist out" logic is used
-;    set litter-list lput (list random-xcor random-ycor) crimes-list
-;
-;    let px-coord item 0 item i litter-list
-;    let py-coord item 1 item i litter-list
-;    ask patch px-coord py-coord [ set pcolor brown ]
-;
-;    set i i + 1
-;  ]
-;
-;end
+to setup-litter
+
+  ; the number of litter locations is initially 10, but will then be determined by the overall PLS (STILL TO BE DONE)
+  let possible-locations patches with [pcolor = 9.1]
+  repeat random-normal 10 5
+  [
+    ; new litter locations are assumed to possibly occur only on streets or vegetation areas.
+    let litter-location one-of possible-locations
+
+    ; litter locations will be visualized as light brown patches
+    ask patch random-pxcor random-pycor [ set pcolor 39 ]
+  ]
+  ; litter locations that have not been cleaned up previously will become of significant amount of litter
+  ; and will be visualized as dark brown patches
+  ask patches with [pcolor <= 39 and pcolor >= 31] [ set pcolor pcolor - 1 ]
+
+end
+
+
+
+to setup-problem-youth
+  create-problem-youth number-problem-youth [
+    setxy random-pxcor random-pycor
+    set shape "problem youngster"
+    set size 15
+    set speed 2 * resolution
+    set target-patch min-one-of (patches with [category = "school" or category = "supermarket"]) [distance myself]
+
+  ]
+end
+
+
+
+
+to hang-around
+  ; problem youth moves from one preferred hotspot to another, where preferred hotspots
+  ; are defined as schools or shopping malls (the latter being categorized as supermarkets)
+
+  ; as long as a problem youngster feels lonely it will get closer to others to form a group, with which to hang out
+  ; if the group is not too large nor too small, problem youth selects a the closest preferred hotspot where to hang out
+  let neighbors-total count other problem-youth in-radius 4
+
+  if patch-here = target-patch
+  [
+    if random 100 > 90
+    [ if any? patches in-radius 3 with [pcolor = 9.1]
+      [ask one-of patches in-radius 3  with [pcolor = 9.1] [set pcolor 39] ]
+    ]
+    ; if the group is too large it splits into two
+    if neighbors-total > 20
+    [
+      ; identify two possible locations where to go next, so that the original group splits into two
+      let possible-locations n-of 2 patches with [category = "school" or category = "supermarket"]
+      let alternative-target-patch one-of possible-locations
+
+      ask n-of 10 problem-youth in-radius 4 [
+        set target-patch alternative-target-patch  ; half of the agents will pick one location and half the other
+
+        ifelse distance target-patch > speed
+        [
+          face target-patch
+          fd speed
+        ][
+          move-to target-patch
+        ]
+      ]
+
+
+    ]
+  ]
+
+  ifelse distance target-patch > speed
+  [
+    face target-patch
+    fd speed
+  ][
+    move-to target-patch
+  ]
+
+
+
+
+end
 
 ; police officers functions -----------------------------------------------------------------
 
@@ -496,11 +571,11 @@ to setup-police
     set station patch-here ; remember the home location of the agent
 
     ;create an initial schedule for the first day of work, it will be then updated
-    set police-schedule table:make
+    set schedule table:make
     let i 0
     repeat (ticksperday + 1)
     [
-      table:put police-schedule i station
+      table:put schedule i station
       set i i + 1
     ]
 
@@ -520,15 +595,17 @@ to schedule-police-officer-day [turtle-id] ; we use turtle-id because the ids of
   let i 0
   repeat (ticksperday + 1)
   [
-    table:put [police-schedule] of turtle turtle-id i station
+    table:put [schedule] of turtle turtle-id i station
     set i i + 1
   ]
 
 
   ; Plan a police-officer's shift
-  ; for all crimes, a visit by a police officer is scheduled (in this way, crimes are assumed to have the highest priority)
+  ; for all crimes, a visit by a police officer is scheduled and will be executed as the shift starts
+  ; in the do-police-job procedure. In this way, crimes are assumed to have the highest priority
   let shift 9 ; hours. When the shift ends, police officers go back to the station
   let time-per-crime 2 ; [hours]
+  let time-per-round 1 ; [hours]
   let start-time round ((random-normal 8 1)  * 60 / resolution) ; [ticks],  the shift starts at 8:00
   let end-shift start-time + ( shift * 60 / resolution ) ; [ticks]
 
@@ -539,30 +616,31 @@ to schedule-police-officer-day [turtle-id] ; we use turtle-id because the ids of
 
    ; create an agentset containing all the crime patches and select one of them to be put in the officer's schedule
    let crimes patches with [ pcolor = red ]
+   let selected-crime one-of crimes
 
-    ifelse (count crimes > 0) [
-      let selected-crime one-of crimes
+   ; schedule the selected crime in the officer's daily schedule for all its relative duration
+   repeat round (time-per-crime * 60 / resolution)
+   [
+     table:put [schedule] of police-officer turtle-id start-time selected-crime
 
-      ;schedule the selected crime in the officer's daily schedule for all its relative duration
-      repeat round (time-per-crime * 60 / resolution)
+     ; increase starttime by one tick
+     set start-time start-time + 1
+   ]
+
+    ; restore the original color of the patch after the crime is scheduled to be taken care of
+    ask selected-crime [ set pcolor 7.9 ]
+
+    ; If any, the remaining time of a shift, after visiting all crime locations, is devoted to doing rounds
+    ; the round content will be specified in the do-police-job procedure
+    while [start-time <= end-shift ]
+    [
+      repeat round (time-per-round * 60 / resolution)
       [
-        table:put [police-schedule] of police-officer turtle-id  start-time selected-crime
-
-        ; increase starttime by one tick
-        set start-time start-time + 1
+      table:put [schedule] of police-officer turtle-id start-time "round"
+      set start-time start-time + 1
       ]
-
-      ; restore the original color of the patch after the crime is scheduled to be taken care of
-      ask selected-crime [ set pcolor 7.9 ]
-
-    ][
-
-
-
-
     ]
-
-
+    show schedule
 
   ]
 
@@ -570,38 +648,104 @@ end
 
 
 
-;to do-police-job [police-officer-id]
-; ;Get scheduled patch from police officer's shcedule
-;  let crime-location table:get schedule tickstoday
-;
-;  ifelse distance scheduled-patch > [speed] of turtle turtle-id [
-;    face scheduled-patch
-;    fd [speed] of turtle turtle-id
-;  ] [
-;    move-to scheduled-patch
-;  ]
-;  ; find the nearest problem youth to go to
-;    let next-target-patch min-one-of (patches in-radius 25 with [pcolor = 9.9]) [distance myself]
-;    if next-target-patch != nobody
-;    [
-;      move-to next-target-patch
-;    ]
-;
-;end
+to do-police-job
+  ;This procedure is called at each tick, therefore we use the current tick to find the activity to perform
+  let activity table:get schedule tickstoday
+
+  ;in the officer's schedule (which is a police-officer's own variable) there are either patches or "round" strings.
+  ;if the activity is a crime-location patch treat it as a location where to go to
+  ifelse activity != "round"
+  [
+    ;go to the crime location scheduled for the current tick
+    ifelse distance activity > speed
+    [
+      face activity
+      fd speed
+    ][
+      move-to activity
+    ]
+
+  ][;if the activity is a "round" string, visit the nearest significant litter or problem youth location
+
+    let next-target-patch min-one-of ( (patch-set patches with [pcolor >= 31 and pcolor <= 33] [patch-here] of problem-youth) ) [distance myself]
+    if next-target-patch != nobody
+    [
+      ifelse distance next-target-patch > speed
+      [
+        face next-target-patch
+        fd speed
+      ][
+        move-to next-target-patch
+
+        ; cause problem youth to run away to another hotspot
+        if any? problem-youth in-radius 4
+        [ask problem-youth in-radius 4 [
+          let alternative-target-patch one-of patches with [category = "school" or category = "supermarket"]
+          set target-patch alternative-target-patch
+          face target-patch
+          fd speed * 2
+          ]
+        ]
+      ]
+    ]
+  ]
+
+end
+
+
+to setup-waste-collectors
+
+  create-waste-collectors number-waste-collectors [
+    ; setxy random-pxcor random-pycor will be done in the collect-waste procedure at each start of the working day
+    set shape "person waste-collector"
+    set size 10
+    set start-working-day round (random-normal 9 1 * 60 / resolution) ; [ticks]
+    set end-working-day (start-working-day + 8 * 60 / resolution) ; [ticks] the working day length is set to 8 hours
+    set speed 3 * resolution
+    ]
+
+end
+
+to collect-waste
+  if tickstoday = start-working-day
+  [
+    ; the waste-collector comes at a radndom location of the map determined by the external waste-collecting scheduling and logic (treated as part of the environment for this model)
+    set hidden? False
+    setxy random-pxcor random-pycor
+  ]
+  if tickstoday > start-working-day and tickstoday < end-working-day
+  [
+    let litter-location min-one-of (patches with [pcolor >= 31 and pcolor <= 39 ]) [distance myself]
+
+    if litter-location != nobody
+    [
+      ifelse distance litter-location > speed
+      [
+        face litter-location
+        fd speed
+      ][
+        move-to litter-location
+        ask patch-here [set pcolor 9.1]
+      ]
+    ]
+  ]
+  if tickstoday = end-working-day
+  [set hidden? True]
+
+end
 
 
 
 ; Reporter / Monitor functions -----------------------------------------------------------------------------------
-
 @#$#@#$#@
 GRAPHICS-WINDOW
 549
 10
-1402
-833
+1372
+804
 -1
 -1
-1.037
+1.0
 1
 10
 1
@@ -719,7 +863,7 @@ number-police-officers
 2.0
 1
 1
-officers on screen
+Officers
 HORIZONTAL
 
 MONITOR
@@ -771,6 +915,21 @@ Policy Levers
 11
 0.0
 1
+
+SLIDER
+14
+309
+287
+342
+number-waste-collectors
+number-waste-collectors
+0
+10
+8.0
+1
+1
+Waste collectors
+HORIZONTAL
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -1032,6 +1191,27 @@ Polygon -2674135 true false 155 91 128 77 128 101
 Rectangle -16777216 true false 118 129 141 140
 Polygon -2674135 true false 145 91 172 77 172 101
 
+person waste-collector
+false
+0
+Rectangle -7500403 true true 123 76 176 95
+Polygon -1 true false 105 90 60 195 90 210 115 162 184 163 210 210 240 195 195 90
+Polygon -13345367 true false 180 195 120 195 90 285 105 300 135 300 150 225 165 300 195 300 210 285
+Circle -7500403 true true 110 5 80
+Line -16777216 false 148 143 150 196
+Rectangle -16777216 true false 116 186 182 198
+Circle -1 true false 152 143 9
+Circle -1 true false 152 166 9
+Rectangle -16777216 true false 179 164 183 186
+Polygon -955883 true false 180 90 195 90 195 165 195 195 150 195 150 120 180 90
+Polygon -955883 true false 120 90 105 90 105 165 105 195 150 195 150 120 120 90
+Rectangle -16777216 true false 135 114 150 120
+Rectangle -16777216 true false 135 144 150 150
+Rectangle -16777216 true false 135 174 150 180
+Polygon -955883 true false 105 42 111 16 128 2 149 0 178 6 190 18 192 28 220 29 216 34 201 39 167 35
+Polygon -6459832 true false 54 253 54 238 219 73 227 78
+Rectangle -16777216 true false 15 225 105 255
+
 plant
 false
 0
@@ -1043,6 +1223,16 @@ Polygon -7500403 true true 165 180 165 210 225 180 255 120 210 135
 Polygon -7500403 true true 135 105 90 60 45 45 75 105 135 135
 Polygon -7500403 true true 165 105 165 135 225 105 255 45 210 60
 Polygon -7500403 true true 135 90 120 45 150 15 180 45 165 90
+
+problem youngster
+false
+1
+Circle -7500403 true false 110 5 80
+Polygon -7500403 true false 105 90 120 195 90 285 105 300 135 300 150 225 165 300 195 300 210 285 180 195 195 90
+Rectangle -7500403 true false 127 79 172 94
+Polygon -7500403 true false 195 90 240 150 225 180 165 105
+Polygon -7500403 true false 105 90 60 150 75 180 135 105
+Polygon -2674135 true true 120 15 135 30 195 30 210 15 180 15 165 0 135 0
 
 sheep
 false
@@ -1157,7 +1347,7 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.1.0
+NetLogo 6.1.1
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
