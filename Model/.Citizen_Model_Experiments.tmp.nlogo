@@ -135,11 +135,11 @@ to setup-globals
   set number-citizens 210 ; scaled down 100x due to performance reasons
 
   ; Global variable settings
-  set viability-increase-little (0.05 / 60) * resolution
+  set viability-increase-little (0.08 / 60) * resolution
   set pls-increase-little 0.00001 * resolution ; pls increase is dependent on the resolution chosen
   set pls-problem-youth-decrease 0.00003 * resolution ; pls decrease when encountering problem youth is the same as the increase when citizens meet a community worker or a police man
-  set pls-litter-decrease 0.002 * resolution ; pls decrease when encountering litter is the same as the chance to scan a QR code (both is gathering information about a place)
-  set pls-burglary-decrease 15 ; burglaries decrese the pls by a lot
+  set pls-litter-decrease 0.00001 * resolution ; pls decrease when encountering litter is the same as when they meet another citizen
+  set pls-burglary-decrease 10 ; burglaries decrese the pls by a lot
 
 
   set qr-scanning-chance 0.002 * resolution ; qr-code scanning chance
@@ -364,6 +364,7 @@ to live-life
 
         ; In case agent is at an initiative, higher the viability of the initiative
         if (current-activity = "initiative") [
+          set pls min list (100) (pls + pls-increase-little)
           ask patch-here [set viability viability + viability-increase-little]
         ]
       ]
@@ -375,7 +376,6 @@ to live-life
 
 
   ; QR code scanning algorithm
-  ; Sometimes forget about QR codes already scanned (TO Discuss)
 
   ; In case they are willing to scan something
   if (random-float 1 < qr-scanning-chance) [
@@ -625,7 +625,7 @@ to setup-crimes
   ; note: this is only an average figure since using spacially and termporally averaged data as inputs. With these basic assumptions, we came up with the following formula:
 
  ; the number of crimes per day varies between 1 and 5, dependent on the overall average pls
-  repeat round (1 - pls-average / 100) * ((random 5 + 1)) ; * number-citizens / 21000)
+  repeat round (1 - pls-average / 100) * ((random 3)) ; * number-citizens / 21000)
   [
     ; Determine the citizen that gets robbed by chance
     let citizen-robbed one-of citizens
@@ -893,6 +893,8 @@ to collect-waste
       ][
         move-to litter-location
         ask patch-here [set pcolor 9.1]
+        ask patches in-radius (speed / 2) with [pcolor >= 31 and pcolor <= 39 ]
+
       ]
     ]
   ]
@@ -900,9 +902,6 @@ to collect-waste
   [set hidden? True]
 
 end
-
-
-
 @#$#@#$#@
 GRAPHICS-WINDOW
 549
@@ -1106,7 +1105,7 @@ interaction-chance
 interaction-chance
 0
 100
-5.0
+20.0
 1
 1
 %
