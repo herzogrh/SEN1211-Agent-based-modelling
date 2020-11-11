@@ -1,5 +1,5 @@
 __includes [ "utilities.nls"] ; all the boring but important stuff not related to content
-extensions [ csv table ]
+extensions [ csv table profiler]
 
 
 globals [
@@ -15,17 +15,19 @@ globals [
   tickstoday ; count of the numbers of ticks on one day
 
   pls-average ; save the pls average once per day for performance reasons
-  pls-max ;
-  pls-min
-  pls-normalized
   viability-average ; save the viability average once per day for performance reasons
+
+  number-citizens ; the number of citizens in the model
 
   ; Increases of Viability and PLS are all relative to a set "little increse". Medium increases are defined as two little increases and large increases as three little increases
   viability-increase-little ; a little viability increase (per hour spent at an initiative)
   pls-increase-little ; a little pls increase
+  pls-problem-youth-decrease ; pls descrese when encountering problem youth
+  pls-litter-decrease ; pls descrese when encountering litter
+  pls-burglary-decrease ; pls descrese when encountering burglaries
   qr-scanning-chance ; the chance that a citizen scans a QR code at a specific location
 
-
+  number-burglaries ; stores how many burglaries happened
   community-center ; stores the patch of the community center
 ]
 
@@ -62,6 +64,7 @@ citizens-own [
   qrcodes-scanned ; number of qr codes scanned by the agents
   initiative-threshold ; the amount of qr-codes that a citizen needs to scan before they start an initiative
   speed ; in patches per tick (will be calculated with the resolution chosen)
+  interactions ; number of interactions a citizen has had from the start of the model run
 ]
 
 
@@ -88,6 +91,16 @@ problem-youth-own [
   target-patch ; the location where to go next
 ]
 
+to execute-profiler
+  profiler:reset
+  setup ;; set up the model
+  profiler:start ;; start profiling
+  repeat 60 [ go ] ;; run something you want to measure
+  profiler:stop ;; stop profiling
+  print profiler:report ;; view the results
+end
+
+
 
 ; Setup -----------------------------------------------------------------------------------------------------------------
 to setup
@@ -99,7 +112,7 @@ to setup
 
   ; Setup of turtles and patches
   setup-globals
-  setup-citizens [100]
+  setup-citizens
   setup-initiatives
   setup-community-workers
   setup-crimes
@@ -111,6 +124,30 @@ to setup
   reset-ticks
 end
 
+to setup-globals
+  ; Timekeeping setup
+  set day 0
+  set totaldays 0
+  set ticksperday 1440 / resolution
+  set tickstoday 0
+
+  ; Number of agents
+  set number-citizens 100
+
+  ; Global variable settings
+  set viability-increase-little (0.05 / 60) * resolution
+  set pls-increase-little 0.001 * resolution ; pls increase is dependent on the resolution chosen
+  set pls-problem-youth-decrease 0.003 * resolution ; pls decrease when encountering problem youth is the same as the increase when citizens meet a community worker or a police man
+  set pls-litter-decrease 0.002 * resolution ; pls decrease when encountering litter is the same as the chance to scan a QR code (both is gathering information about a place)
+  set pls-burglary-decrease 15 ; burglaries decrese the pls by a lot
+
+
+  set qr-scanning-chance 0.002 * resolution ; qr-code scanning chance
+  set community-center one-of patches with [category = "community centre"]
+
+end
+
+
 
 to go
   ; do timekeeping
@@ -118,7 +155,8 @@ to go
   ; stop simulation after 3 years
   if (totaldays > 3 * 365) [stop]
   ; update pls average
-  set pls-average median [pls] of citizens
+  set pls-average mean [pls] of citizens
+  set viability-average mean [viability] of patches with [category = "neighbourhood initiative"]
 
   ; let all turtles live their lifes and do their jobs (citizens, community workers, police)
   ask citizens [live-life]
@@ -134,29 +172,10 @@ to go
 end
 
 
-
-to setup-globals
-  ; Timekeeping setup
-  set day 0
-  set totaldays 0
-  set ticksperday 1440 / resolution
-  set tickstoday 0
-
-  ; Global variable settings
-  set viability-increase-little (0.2 / 60) * resolution
-  set pls-increase-little 1
-  set qr-scanning-chance 0.1
-  set community-center one-of patches with [category = "community centre"]
-
-end
-
-
 to do-timekeeping
   ifelse (tickstoday < ticksperday)
   ; in case the day is not yet finished
-  [
-    set tickstoday tickstoday + 1
-  ]
+  [set tickstoday tickstoday + 1]
 
   ; in case the day is finished, advance one day and let citizens reschedule their day
   [
@@ -166,20 +185,6 @@ to do-timekeeping
     ; in case it is sunday, set day to monday, otherwise increse weekday count
     ifelse (day = 7) [ set day 1]
     [ set day day + 1 ]
-
-    ; set the averages for performance reasons
-    ; set pls-average mean [pls] of citizens
-    ;;set pls-average mean [pls] of citizens
-    set pls-average median [pls] of citizens
-    set pls-max max [pls] of citizens
-    set pls-min min [pls] of citizens
-    set pls-normalized (pls-average - pls-min) * 100 / (pls-max - pls-min)
-
-;    (avg - min) : max - min    =       x : 100 - 0
-;    x = (avg - min) * 100 / (max - min)
-
-
-    set viability-average mean [viability] of patches with [category = "neighbourhood initiative"]
 
     ;let all turtles schedule their day (and citizens to possibly start an initiative, if conditions are given
     ask citizens [
@@ -191,7 +196,7 @@ to do-timekeeping
     ; let the daily crimes occur and litter be produced
     setup-crimes
     setup-litter
-    ask police-officers [ schedule-police-officer-day who ]
+    ask police-officers [ schedule-police-officer-day ]
 
     ;handle the initiative time
     ask patches with [category = "neighbourhood initiative"] [
@@ -235,13 +240,13 @@ end
 
 to interact
 
-  let citizens-to-interact citizens in-radius 5  ; create an agentset with all citizens in a given radius
+  let citizens-to-interact citizens in-radius 1  ; create an agentset with all citizens in a given radius
 
   ; take the variable from the slider as a basic interaction chance for citizens & make it dependent on the average pls, which caps the pecentage of interactions possible
   let chance-to-interact ((interaction-chance / 100) * (pls-average / 100))
   if breed = community-workers [set chance-to-interact 1] ; community workers will always speak to citizens
   if breed = police-officers [set chance-to-interact (1 - (pls-average / 100))] ; police workers solely interact upon the average perceived pls (always interact when average is 0, never interact when average is 100
-  ;  if breed = garbage-collectors [set chance-to-interact 0] -> no interaction with them
+  if breed = waste-collectors [set chance-to-interact 0] ; no interaction possible with waste collectors
 
   ; only do interactions if there are agents to interact with and the chance of interaction is fulfilled
   if (any? citizens-to-interact) and (random-float 1 < chance-to-interact) [
@@ -251,15 +256,22 @@ to interact
     if breed = community-workers and any? citizens-to-interact with [part-of-initiative] [set citizen-to-interact one-of citizens-to-interact with [part-of-initiative]]
 
     ifelse (breed = citizens) [
-      set pls pls + pls-increase-little  ; higher own pls by a little, if interaction is successful
-      ask citizen-to-interact [set pls pls + pls-increase-little] ; higher the pls of the other person by a little
+      set pls min list (100) (pls + pls-increase-little)  ; higher own pls by a little, if interaction is successful
+      ask citizen-to-interact [
+        set pls min list (100) (pls + pls-increase-little)
+        set interactions interactions + 1
+      ] ; higher the pls of the other person by a little
     ] [
-      ask citizen-to-interact [set pls pls + (3 * pls-increase-little)]] ; higher the amount of pls of the other person by a lot
+      ask citizen-to-interact [
+        set pls min list (100) (pls + (3 * pls-increase-little))
+        set interactions interactions + 1
+      ]
+    ] ; higher the amount of pls of the other person by a lot
   ]
 
   ; Experience litter and problem youth
-  if (breed = citizens and any? problem-youth in-radius 5) [set pls pls - pls-increase-little]
-  if (breed = citizens and any? patches in-radius 5 with [pcolor <= 39 and pcolor >= 31]) [set pls pls - pls-increase-little]
+  if (breed = citizens and any? problem-youth in-radius 5) [set pls max list (0) (pls - pls-problem-youth-decrease)]
+  if (breed = citizens and any? patches in-radius 5 with [pcolor <= 39 and pcolor >= 31]) [set pls max list (0) (pls - pls-litter-decrease)]
 end
 
 
@@ -269,17 +281,18 @@ end
 ; Citizen Functions-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ;-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-to setup-citizens [number]
-  create-citizens item 0 number [
+to setup-citizens
+  create-citizens number-citizens [
     set house one-of patches with [pcolor = 7.9] ; remember the home location of the agent
     setxy [pxcor] of house [pycor] of house
     set children random-float 1 < 0.6 ; chance that one citizen has children is 60%
     set job random-float 1 < 0.6 ; chance that one citizen has a job is 60% as well
     set religious random-float 1 < 0.5 ; chance that one citizen is religious is 50%
-    set pls random-normal 40 10 ;
+    set pls  min list 100 (max list (0) (random-normal 40 10)) ;
     set qrcodes-scanned max list (0) (round random-normal 15 10); assumption: in the beginning, each citizen scanned around 5-25 QR codes
     set initiative-threshold random-normal 40 5 ; assumption: a citizens needs around 35-45 QR codes scanned to start an initiative
     set speed random-normal 3 1 * resolution ; speed depends on the resolution (unit: patch/minute)
+    set interactions 0
     set shape "person"
     set size 5
 
@@ -318,18 +331,20 @@ to live-life
   let destination house
 
   ; Make agent move depending on the current activity
-  if (current-activity = "work") [ set destination work]
-  if (current-activity = "shopping") [ set destination min-one-of patches with [category = "supermarket"] [distance myself]]
-  if (current-activity = "worship") [ set destination min-one-of patches with [category = "religious"] [distance myself]]
-  if (current-activity = "initiative") [
-    ifelse part-of-initiative [ set destination initiative  ][
-      ; If citizens are not yet part of an initiative, assign them to the closest
-      let closest-initiative min-one-of patches with [category = "neighbourhood initiative"][distance myself]
-      set part-of-initiative True
-      set initiative closest-initiative
-      set destination closest-initiative
-    ]
-    ]
+  ifelse (current-activity = "work") [ set destination work][
+    ifelse (current-activity = "school") [ set destination school][
+      ifelse (current-activity = "shopping") [ set destination min-one-of patches with [category = "supermarket"] [distance myself]][
+        ifelse (current-activity = "worship") [ set destination min-one-of patches with [category = "religious"] [distance myself]][
+          if (current-activity = "initiative") [
+            if part-of-initiative [ set destination initiative  ]
+              ; If citizens are not yet part of an initiative, assign them to the closest
+              let closest-initiative min-one-of patches with [category = "neighbourhood initiative"][distance myself]
+              set part-of-initiative True
+              set initiative closest-initiative
+              set destination closest-initiative
+  ]]]]]
+
+
 
   ; if the activity is walking, randomly roam around (but 1 tick slower than when having a destination)
   ifelse (current-activity = "walking") [
@@ -337,18 +352,20 @@ to live-life
     fd speed - 1
   ] [
     ; else head towards the direction
-    ifelse distance destination > speed
-    [ ; if the distance to the destination is greater than the current speed, move towards the destination
-      face destination
-      fd speed
-    ] [ ;else go to the place
-      move-to destination
 
-      ; In case agent is at an initiative, higher the viability of the initiative
-      if (current-activity = "initiative") [
-        ask patch-here [set viability viability + viability-increase-little]
+    if patch-here != destination [
+      ifelse distance destination > speed
+      [ ; if the distance to the destination is greater than the current speed, move towards the destination
+        face destination
+        fd speed
+      ] [ ;else go to the place
+        move-to destination
+
+        ; In case agent is at an initiative, higher the viability of the initiative
+        if (current-activity = "initiative") [
+          ask patch-here [set viability viability + viability-increase-little]
+        ]
       ]
-
     ]
   ]
 
@@ -406,7 +423,6 @@ to schedule-citizen-day []
       set timescheduled timescheduled + schooltime
     ]
   ]
-
 
   ; applicable for all the days and based on chance
   ;worship
@@ -466,8 +482,17 @@ to schedule-citizen-day []
     set row row + 1
   ]
 
+  ; If agents have children, always pick them up around 17:00 - Override any other scheduled activities, because children are important!!
+  if children [
+    let pick-up-time (17 * 60 / resolution)
 
-  ;show [schedule] of turtle turtle-id
+    repeat round (random-normal 1 0.5) * 60 / resolution[
+      table:put schedule pick-up-time "school"
+      set pick-up-time pick-up-time + 1
+    ]
+
+  ]
+
 
 
 end
@@ -599,8 +624,8 @@ to setup-crimes
   ; or equivalently, a daily figure of 3.1 r.c./day
   ; note: this is only an average figure since using spacially and termporally averaged data as inputs. With these basic assumptions, we came up with the following formula:
 
- ; the number of crimes per day varies between 1 and 5, dependent on the overall average pls
-  repeat round (1 - pls-average / 100) * (random 5 + 1)
+ ; the number of crimes per day varies between 1 and 10, dependent on the overall average pls
+  repeat round (1 - pls-average / 100) * ((random 10 + 1)) ; * number-citizens / 21000)
   [
     ; Determine the citizen that gets robbed by chance
     let citizen-robbed one-of citizens
@@ -615,7 +640,7 @@ to setup-crimes
     ask patch px-coord py-coord [ set pcolor red ]
 
     ; burglary will lower the citzen's pls at a very high amount
-    ask citizen-robbed [set pls max list (0) (pls - 10 * pls-increase-little)]
+    ask citizen-robbed [set pls max list (0) (pls - pls-burglary-decrease)]
   ]
   ; show crimes-list
 end
@@ -644,7 +669,7 @@ to setup-problem-youth [number]
   create-problem-youth item 0 number [
     setxy random-pxcor random-pycor
     set shape "problem youngster"
-    set size 15
+    set size 10
     set speed 2 * resolution
     set target-patch min-one-of (patches with [category = "school" or category = "supermarket"]) [distance myself]
 
@@ -726,18 +751,18 @@ to setup-police
     set speed 3 * resolution
   ]
   ; for the day 0 ask police officers to compose their first schedule
-  ask police-officers [ schedule-police-officer-day who ]
+  ask police-officers [ schedule-police-officer-day ]
 
 end
 
-to schedule-police-officer-day [turtle-id] ; we use turtle-id because the ids of turtles are unique, regardless of the turtle's breed
+to schedule-police-officer-day ; we use turtle-id because the ids of turtles are unique, regardless of the turtle's breed
                                            ; this procedure will be called for each police officer agent of the police-officers agentset at the start of each day
 
   ; since this procedure is called for day 0 and also for each other day, we here empty the schedule of the day (from the previous day's activities)
   let i 0
   repeat (ticksperday + 1)
   [
-    table:put [schedule] of turtle turtle-id i station
+    table:put schedule i station
     set i i + 1
   ]
 
@@ -763,7 +788,7 @@ to schedule-police-officer-day [turtle-id] ; we use turtle-id because the ids of
    ; schedule the selected crime in the officer's daily schedule for all its relative duration
    repeat round (time-per-crime * 60 / resolution)
    [
-     table:put [schedule] of police-officer turtle-id start-time selected-crime
+     table:put schedule start-time selected-crime
 
      ; increase starttime by one tick
      set start-time start-time + 1
@@ -778,7 +803,7 @@ to schedule-police-officer-day [turtle-id] ; we use turtle-id because the ids of
     [
       repeat round (time-per-round * 60 / resolution)
       [
-      table:put [schedule] of police-officer turtle-id start-time "round"
+      table:put schedule  start-time "round"
       set start-time start-time + 1
       ]
     ]
@@ -958,7 +983,7 @@ SWITCH
 156
 debug?
 debug?
-1
+0
 1
 -1000
 
@@ -971,7 +996,7 @@ resolution
 resolution
 5
 60
-15.0
+45.0
 5
 1
 minutes/tick
@@ -986,7 +1011,7 @@ number-cw
 number-cw
 0
 10
-6.0
+4.0
 1
 1
 Community workers
@@ -1036,8 +1061,6 @@ true
 PENS
 "Average Initiative Viability" 1.0 0 -16777216 true "" "plot viability-average"
 "Average PLS" 1.0 0 -13840069 true "" "plot pls-average"
-"Max PLS" 1.0 0 -7500403 true "" "plot pls-max"
-"Min PLS" 1.0 0 -2674135 true "" "plot pls-min"
 
 TEXTBOX
 13
@@ -1083,7 +1106,7 @@ interaction-chance
 interaction-chance
 0
 100
-49.0
+50.0
 1
 1
 %
@@ -1105,23 +1128,39 @@ Initiatives
 HORIZONTAL
 
 PLOT
-10
-621
-411
-809
-Normalized PLS
-Time [Ticks]
-average PLS
+301
+280
+501
+430
+Histogram of citizen's pls
+NIL
+NIL
 0.0
-10.0
+100.0
 0.0
-120.0
+1.0
 true
-true
+false
 "" ""
 PENS
-"Normalized PLS" 1.0 0 -5298144 true "" "plot pls-normalized"
-"PLS range" 1.0 0 -7500403 true "" "plot (pls-max - pls-min)"
+"default" 1.0 1 -16777216 true "" "histogram [pls] of citizens"
+
+BUTTON
+380
+150
+513
+183
+NIL
+execute-profiler
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -1539,15 +1578,15 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.1.1
+NetLogo 6.1.0
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
 <experiments>
-  <experiment name="experiment" repetitions="1" runMetricsEveryStep="true">
+  <experiment name="BaseCase" repetitions="1" runMetricsEveryStep="true">
     <setup>setup</setup>
     <go>go</go>
-    <metric>count turtles</metric>
+    <metric>mean [pls] of citizens</metric>
     <enumeratedValueSet variable="debug?">
       <value value="true"/>
     </enumeratedValueSet>
