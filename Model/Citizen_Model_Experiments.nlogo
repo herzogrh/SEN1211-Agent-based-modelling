@@ -135,7 +135,7 @@ to setup-globals
   set number-citizens 210 ; scaled down 100x due to performance reasons
 
   ; Global variable settings
-  set viability-increase-little (0.08 / 60) * resolution
+  set viability-increase-little (0.1 / 60) * resolution
   set pls-increase-little 0.00001 * resolution ; pls increase is dependent on the resolution chosen
   set pls-problem-youth-decrease 0.00003 * resolution ; pls decrease when encountering problem youth is the same as the increase when citizens meet a community worker or a police man
   set pls-litter-decrease 0.00001 * resolution ; pls decrease when encountering litter is the same as when they meet another citizen
@@ -156,8 +156,7 @@ to go
   if (totaldays > 3 * 365) [stop]
   ; update pls average
   set pls-average mean [pls] of citizens
-  if any? patches with [category = "neighbourhood initiative"] [set viability-average mean [viability] of patches with [category = "neighbourhood initiative"] ]
-
+  set viability-average mean [viability] of patches with [category = "neighbourhood initiative"]
 
   ; let all turtles live their lifes and do their jobs (citizens, community workers, police)
   ask citizens [live-life]
@@ -983,7 +982,7 @@ SWITCH
 156
 debug?
 debug?
-1
+0
 1
 -1000
 
@@ -1120,7 +1119,7 @@ SLIDER
 number-supported-initiatives
 number-supported-initiatives
 0
-30
+25
 10.0
 1
 1
@@ -1578,7 +1577,7 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.1.1
+NetLogo 6.1.0
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
@@ -1587,9 +1586,13 @@ NetLogo 6.1.1
     <setup>setup</setup>
     <go>go</go>
     <metric>mean [pls] of citizens</metric>
-    <metric>standard-deviation [pls] of citizens</metric>
+    <metric>mean [interactions] of citizens</metric>
+    <metric>mean [qrcodes-scanned] of citizens</metric>
     <enumeratedValueSet variable="debug?">
       <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-cw">
+      <value value="3"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="verbose?">
       <value value="false"/>
@@ -1601,16 +1604,13 @@ NetLogo 6.1.1
       <value value="2"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="number-supported-initiatives">
-      <value value="10"/>
+      <value value="5"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="number-waste-collectors">
       <value value="4"/>
     </enumeratedValueSet>
-    <enumeratedValueSet variable="number-cw">
-      <value value="3"/>
-    </enumeratedValueSet>
     <enumeratedValueSet variable="interaction-chance">
-      <value value="20"/>
+      <value value="15"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="random-seed">
       <value value="1"/>
