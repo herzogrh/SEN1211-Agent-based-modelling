@@ -520,7 +520,7 @@ to start-initiative
 
 
     ; Whenever a new initiative is started, reduce the number of problem youth
-    ; ask n-of 5 problem-youngster [die]
+    ask n-of 5 problem-youth [die]
 
   ]
 
@@ -1577,7 +1577,7 @@ false
 Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 @#$#@#$#@
-NetLogo 6.1.0
+NetLogo 6.1.1
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
@@ -1611,6 +1611,42 @@ NetLogo 6.1.0
     </enumeratedValueSet>
     <enumeratedValueSet variable="interaction-chance">
       <value value="15"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="random-seed">
+      <value value="1"/>
+      <value value="2"/>
+      <value value="3"/>
+      <value value="4"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="experiments_increase_social_support" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <metric>mean [pls] of citizens</metric>
+    <metric>standard-deviation [pls] of citizens</metric>
+    <enumeratedValueSet variable="number-supported-initiatives">
+      <value value="24"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-waste-collectors">
+      <value value="4"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="debug?">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-cw">
+      <value value="3"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="interaction-chance">
+      <value value="20"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="resolution">
+      <value value="45"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="verbose?">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-police-officers">
+      <value value="2"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="random-seed">
       <value value="1"/>
