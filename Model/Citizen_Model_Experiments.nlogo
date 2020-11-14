@@ -1025,7 +1025,7 @@ number-police-officers
 number-police-officers
 0
 10
-2.0
+4.0
 1
 1
 Officers
@@ -1582,7 +1582,7 @@ NetLogo 6.1.1
 @#$#@#$#@
 @#$#@#$#@
 <experiments>
-  <experiment name="BaseCase" repetitions="1" runMetricsEveryStep="true">
+  <experiment name="01_BaseCase" repetitions="1" runMetricsEveryStep="true">
     <setup>setup</setup>
     <go>go</go>
     <metric>mean [pls] of citizens</metric>
