@@ -1025,7 +1025,7 @@ number-police-officers
 number-police-officers
 0
 10
-2.0
+4.0
 1
 1
 Officers
@@ -1582,7 +1582,7 @@ NetLogo 6.1.0
 @#$#@#$#@
 @#$#@#$#@
 <experiments>
-  <experiment name="BaseCase" repetitions="1" runMetricsEveryStep="true">
+  <experiment name="01_BaseCase" repetitions="1" runMetricsEveryStep="true">
     <setup>setup</setup>
     <go>go</go>
     <metric>mean [pls] of citizens</metric>
@@ -1604,6 +1604,77 @@ NetLogo 6.1.0
     </enumeratedValueSet>
     <enumeratedValueSet variable="number-supported-initiatives">
       <value value="10"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-waste-collectors">
+      <value value="4"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="interaction-chance">
+      <value value="20"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="random-seed">
+      <value value="1"/>
+      <value value="2"/>
+      <value value="3"/>
+      <value value="4"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="02_IncreaseEnforcements" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <metric>mean [pls] of citizens</metric>
+    <enumeratedValueSet variable="debug?">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="verbose?">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="resolution">
+      <value value="45"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-cw">
+      <value value="3"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-police-officers">
+      <value value="4"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-supported-initiatives">
+      <value value="10"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-waste-collectors">
+      <value value="4"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="interaction-chance">
+      <value value="20"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="random-seed">
+      <value value="1"/>
+      <value value="2"/>
+      <value value="3"/>
+      <value value="4"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="05_IncreaseSocialSupport" repetitions="1" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <metric>mean [pls] of citizens</metric>
+    <metric>standard-deviation [pls] of citizens</metric>
+    <enumeratedValueSet variable="debug?">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="verbose?">
+      <value value="false"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="resolution">
+      <value value="45"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-cw">
+      <value value="3"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-police-officers">
+      <value value="2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="number-supported-initiatives">
+      <value value="24"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="number-waste-collectors">
       <value value="4"/>
